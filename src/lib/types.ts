@@ -21,6 +21,8 @@ export interface SourceText {
 export interface StormTweet {
   id: string;
   ref: string;
+  slug?: string;
+  sourceRef?: string;
   tweetNumber: number;
   totalTweets: number;
   text: string;
@@ -29,6 +31,20 @@ export interface StormTweet {
   imageData?: string;
   imageMimeType?: string;
   imageLoading?: boolean;
+}
+
+export interface CommentaryTweet {
+  id: string;
+  commentator: string;
+  text: string;
+  sourceRef: string;
+}
+
+export interface PickerState {
+  categoryIndex: number;
+  itemIndex: number;
+  perek: string;
+  mishnah: string;
 }
 
 export interface SavedStorm {

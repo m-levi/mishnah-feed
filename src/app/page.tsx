@@ -6,7 +6,7 @@ import { InlinePicker } from "@/components/mishnah-selector";
 import { StormCard } from "@/components/storm-card";
 import { TweetSkeleton } from "@/components/tweet-skeleton";
 import { LearnMoreModal } from "@/components/learn-more-modal";
-import type { StormTweet, SourceType } from "@/lib/types";
+import type { StormTweet, SourceType, PickerState } from "@/lib/types";
 
 type TabKey = "foryou" | "mishnayos" | "gemara" | "chumash";
 
@@ -16,6 +16,18 @@ const tabs: { key: TabKey; label: string }[] = [
   { key: "gemara", label: "Gemara" },
   { key: "chumash", label: "Tanakh" },
 ];
+
+const defaultPickerState: PickerState = {
+  categoryIndex: -1,
+  itemIndex: -1,
+  perek: "",
+  mishnah: "",
+};
+
+interface FeedCache {
+  tweets: StormTweet[];
+  selection: string;
+}
 
 export default function HomePage() {
   const [activeTab, setActiveTab] = useState<TabKey>("foryou");
@@ -29,6 +41,26 @@ export default function HomePage() {
   const [selectedTweet, setSelectedTweet] = useState<StormTweet | null>(null);
   const imageQueueRef = useRef<Set<number>>(new Set());
   const hasAutoLoaded = useRef(false);
+
+  // Feed cache per tab
+  const feedCacheRef = useRef<Record<string, FeedCache>>({});
+
+  // Picker state per tab
+  const [pickerStates, setPickerStates] = useState<Record<string, PickerState>>(
+    {
+      mishnayos: { ...defaultPickerState },
+      gemara: { ...defaultPickerState },
+      chumash: { ...defaultPickerState },
+    }
+  );
+
+  // Swipe tracking
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
+  const touchEndRef = useRef<number | null>(null);
+  const swipeAreaRef = useRef<HTMLDivElement>(null);
+
+  // Tab indicator ref for animation
+  const tabRowRef = useRef<HTMLDivElement>(null);
 
   // Auto-load discovery feed on first mount
   useEffect(() => {
@@ -55,6 +87,11 @@ export default function HomePage() {
       if (!res.ok) throw new Error("Failed to generate");
       const data = await res.json();
       setTweets(data.tweets);
+      // Cache immediately
+      feedCacheRef.current["foryou"] = {
+        tweets: data.tweets,
+        selection: "For You",
+      };
     } catch {
       setError("Failed to load feed. Tap refresh to try again.");
     } finally {
@@ -62,18 +99,39 @@ export default function HomePage() {
     }
   };
 
-  const handleTabChange = (tab: TabKey) => {
-    setActiveTab(tab);
-    if (tab === "foryou") {
-      loadDiscoverFeed();
-    } else {
-      // Clear feed — user needs to pick from inline selector
-      setTweets([]);
-      setError(null);
+  const handleTabChange = useCallback(
+    (tab: TabKey) => {
+      if (tab === activeTab) return;
+
+      // Save current tab's feed to cache (if we have tweets)
+      if (tweets.length > 0 && !isLoading) {
+        feedCacheRef.current[activeTab] = {
+          tweets: [...tweets],
+          selection: currentSelection,
+        };
+      }
+
+      setActiveTab(tab);
       setShareUrl(null);
-      setCurrentSelection("");
-    }
-  };
+      setCopied(false);
+      setError(null);
+
+      // Try to restore from cache
+      const cached = feedCacheRef.current[tab];
+      if (cached && cached.tweets.length > 0) {
+        setTweets(cached.tweets);
+        setCurrentSelection(cached.selection);
+        setIsLoading(false);
+      } else if (tab === "foryou") {
+        loadDiscoverFeed();
+      } else {
+        setTweets([]);
+        setCurrentSelection("");
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [activeTab, tweets, currentSelection, isLoading]
+  );
 
   const handleSelect = useCallback(
     async (
@@ -99,13 +157,18 @@ export default function HomePage() {
         if (!res.ok) throw new Error("Failed to generate");
         const data = await res.json();
         setTweets(data.tweets);
+        // Cache this feed
+        feedCacheRef.current[activeTab] = {
+          tweets: data.tweets,
+          selection: displayName,
+        };
       } catch {
         setError("Failed to load. Please try again.");
       } finally {
         setIsLoading(false);
       }
     },
-    []
+    [activeTab]
   );
 
   const handleUpdateTweet = useCallback(
@@ -181,6 +244,43 @@ export default function HomePage() {
     processNext();
   }, [tweets, handleUpdateTweet]);
 
+  // Swipe handlers
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    touchStartRef.current = {
+      x: e.targetTouches[0].clientX,
+      y: e.targetTouches[0].clientY,
+    };
+    touchEndRef.current = null;
+  }, []);
+
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    touchEndRef.current = e.targetTouches[0].clientX;
+  }, []);
+
+  const handleTouchEnd = useCallback(() => {
+    if (!touchStartRef.current || touchEndRef.current === null) return;
+
+    const distanceX = touchStartRef.current.x - touchEndRef.current;
+    const minSwipeDistance = 60;
+
+    // Only swipe if horizontal distance is significant
+    if (Math.abs(distanceX) < minSwipeDistance) return;
+
+    const tabKeys = tabs.map((t) => t.key);
+    const currentIndex = tabKeys.indexOf(activeTab);
+
+    if (distanceX > 0 && currentIndex < tabKeys.length - 1) {
+      // Swipe left → next tab
+      handleTabChange(tabKeys[currentIndex + 1]);
+    } else if (distanceX < 0 && currentIndex > 0) {
+      // Swipe right → prev tab
+      handleTabChange(tabKeys[currentIndex - 1]);
+    }
+
+    touchStartRef.current = null;
+    touchEndRef.current = null;
+  }, [activeTab, handleTabChange]);
+
   const handleShare = async () => {
     if (tweets.length === 0) return;
     setIsSharing(true);
@@ -207,18 +307,27 @@ export default function HomePage() {
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const handlePickerStateChange = useCallback(
+    (newState: PickerState) => {
+      setPickerStates((prev) => ({ ...prev, [activeTab]: newState }));
+    },
+    [activeTab]
+  );
+
   const showFeed = !isLoading && tweets.length > 0;
-  const showEmpty = !isLoading && tweets.length === 0 && activeTab !== "foryou" && !error;
+  const showEmpty =
+    !isLoading && tweets.length === 0 && activeTab !== "foryou" && !error;
   const imagesLoading = tweets.some((t) => t.imageLoading);
   const imagesTotal = tweets.filter((t) => t.needsImage).length;
   const imagesDone = tweets.filter((t) => t.needsImage && t.imageData).length;
 
+  // Tab indicator position
+  const activeTabIndex = tabs.findIndex((t) => t.key === activeTab);
+
   return (
     <div className="min-h-screen bg-[var(--bg)]">
       {/* Header */}
-      <div
-        className="sticky top-0 z-10 bg-[var(--card-bg)]/95 backdrop-blur-md border-b border-[var(--border)] no-print"
-      >
+      <div className="sticky top-0 z-10 bg-[var(--card-bg)]/95 backdrop-blur-md border-b border-[var(--border)] no-print">
         {/* Top row: logo + actions */}
         <div className="max-w-2xl mx-auto px-4 pt-3 pb-1 flex items-center justify-between">
           <h1
@@ -255,23 +364,30 @@ export default function HomePage() {
         </div>
 
         {/* Tab row */}
-        <div className="max-w-2xl mx-auto flex">
-          {tabs.map((tab) => (
-            <button
-              key={tab.key}
-              onClick={() => handleTabChange(tab.key)}
-              className={`flex-1 py-3 text-sm font-semibold transition-colors cursor-pointer relative ${
-                activeTab === tab.key
-                  ? "text-[var(--text)]"
-                  : "text-[var(--muted)] hover:text-[var(--text)]"
-              }`}
-            >
-              {tab.label}
-              {activeTab === tab.key && (
-                <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-14 h-[3px] rounded-full bg-[var(--accent)]" />
-              )}
-            </button>
-          ))}
+        <div className="max-w-2xl mx-auto relative" ref={tabRowRef}>
+          <div className="flex">
+            {tabs.map((tab) => (
+              <button
+                key={tab.key}
+                onClick={() => handleTabChange(tab.key)}
+                className={`flex-1 py-3 text-sm font-semibold transition-colors cursor-pointer relative ${
+                  activeTab === tab.key
+                    ? "text-[var(--text)]"
+                    : "text-[var(--muted)] hover:text-[var(--text)]"
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+          {/* Sliding tab indicator */}
+          <div
+            className="absolute bottom-0 h-[3px] rounded-full bg-[var(--accent)] transition-all duration-300 ease-out"
+            style={{
+              width: `${100 / tabs.length}%`,
+              left: `${(activeTabIndex * 100) / tabs.length}%`,
+            }}
+          />
         </div>
       </div>
 
@@ -281,6 +397,8 @@ export default function HomePage() {
           sourceType={activeTab as SourceType}
           onSelect={handleSelect}
           isLoading={isLoading}
+          state={pickerStates[activeTab] || defaultPickerState}
+          onStateChange={handlePickerStateChange}
         />
       )}
 
@@ -332,38 +450,48 @@ export default function HomePage() {
         </div>
       )}
 
-      {/* Loading skeletons */}
-      {isLoading && (
-        <div>
-          {Array.from({ length: 6 }, (_, i) => (
-            <TweetSkeleton key={i} index={i} />
-          ))}
-        </div>
-      )}
+      {/* Swipeable content area */}
+      <div
+        ref={swipeAreaRef}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+      >
+        {/* Loading skeletons */}
+        {isLoading && (
+          <div>
+            {Array.from({ length: 6 }, (_, i) => (
+              <TweetSkeleton key={i} index={i} />
+            ))}
+          </div>
+        )}
 
-      {/* Empty state for source tabs */}
-      {showEmpty && (
-        <div className="flex flex-col items-center justify-center py-20 px-6 text-center">
-          <p className="text-[var(--muted)] text-[15px]">
-            Pick a text above and tap <strong className="text-[var(--text)]">Go</strong> to generate a feed
-          </p>
-        </div>
-      )}
+        {/* Empty state for source tabs */}
+        {showEmpty && (
+          <div className="flex flex-col items-center justify-center py-20 px-6 text-center">
+            <p className="text-[var(--muted)] text-[15px]">
+              Pick a text above and tap{" "}
+              <strong className="text-[var(--text)]">Go</strong> to generate a
+              feed
+            </p>
+          </div>
+        )}
 
-      {/* Feed */}
-      {showFeed && (
-        <div>
-          {tweets.map((tweet, i) => (
-            <div
-              key={tweet.id}
-              className="fade-in"
-              style={{ animationDelay: `${Math.min(i * 40, 400)}ms` }}
-            >
-              <StormCard tweet={tweet} onTap={setSelectedTweet} />
-            </div>
-          ))}
-        </div>
-      )}
+        {/* Feed */}
+        {showFeed && (
+          <div>
+            {tweets.map((tweet, i) => (
+              <div
+                key={tweet.id}
+                className="fade-in"
+                style={{ animationDelay: `${Math.min(i * 40, 400)}ms` }}
+              >
+                <StormCard tweet={tweet} onTap={setSelectedTweet} />
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       {/* Learn more modal */}
       {selectedTweet && (

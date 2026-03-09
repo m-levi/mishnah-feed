@@ -139,7 +139,10 @@ Respond with ONLY valid JSON (no markdown, no code fences):
     const stormTweets: StormTweet[] = [];
     let globalIndex = 0;
 
-    for (const storm of parsed.storms) {
+    for (let stormIdx = 0; stormIdx < parsed.storms.length; stormIdx++) {
+      const storm = parsed.storms[stormIdx];
+      const pick = validTexts[Math.min(stormIdx, validTexts.length - 1)]?.pick;
+
       const imageMap = new Map<number, string>();
       const imageTweets = storm.imageTweets || [];
       for (const img of imageTweets) {
@@ -155,6 +158,8 @@ Respond with ONLY valid JSON (no markdown, no code fences):
         stormTweets.push({
           id: `discover-${globalIndex}`,
           ref: storm.ref,
+          slug: pick?.slug,
+          sourceRef: pick?.ref,
           tweetNumber: i + 1,
           totalTweets: storm.tweets.length,
           text: storm.tweets[i],

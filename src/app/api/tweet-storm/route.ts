@@ -150,6 +150,8 @@ Respond with ONLY valid JSON (no markdown, no code fences):
         stormTweets.push({
           id: `storm-${storm.ref}-${i}`,
           ref: storm.ref,
+          slug,
+          sourceRef: ref,
           tweetNumber: i + 1,
           totalTweets: storm.tweets.length,
           text: storm.tweets[i],

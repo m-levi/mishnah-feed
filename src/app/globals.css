@@ -126,6 +126,16 @@ body {
   cursor: not-allowed;
 }
 
+/* Picker slide in */
+@keyframes pickerSlideIn {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.picker-slide-in {
+  animation: pickerSlideIn 0.25s ease-out;
+}
+
 /* Print */
 @media print {
   body { background: white; }

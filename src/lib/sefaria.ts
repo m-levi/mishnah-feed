@@ -4,6 +4,58 @@ function stripHtml(html: string): string {
   return html.replace(/<[^>]*>/g, "").trim();
 }
 
+export interface Commentary {
+  commentator: string;
+  text: string;
+  heText: string;
+  sourceRef: string;
+}
+
+export async function fetchCommentary(
+  slug: string,
+  ref: string
+): Promise<Commentary[]> {
+  const fullRef = `${slug}.${ref}`;
+  const url = `https://www.sefaria.org/api/related/${encodeURIComponent(fullRef)}`;
+
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return [];
+
+    const data = await res.json();
+    const links = data.links || [];
+
+    const seen = new Set<string>();
+    const results: Commentary[] = [];
+
+    for (const link of links) {
+      if (link.category !== "Commentary") continue;
+      const name =
+        link.collectiveTitle?.en || link.index_title || "Commentary";
+      if (seen.has(name)) continue;
+      seen.add(name);
+
+      const enText =
+        typeof link.text === "string" ? stripHtml(link.text) : "";
+      const heText = typeof link.he === "string" ? link.he : "";
+      if (!enText && !heText) continue;
+
+      results.push({
+        commentator: name,
+        text: enText,
+        heText,
+        sourceRef: link.ref || "",
+      });
+
+      if (results.length >= 8) break;
+    }
+
+    return results;
+  } catch {
+    return [];
+  }
+}
+
 export async function fetchTexts(
   slug: string,
   ref: string // chapter number like "1" or daf like "2a"
