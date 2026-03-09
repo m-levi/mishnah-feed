@@ -91,7 +91,7 @@ export function InlinePicker({
               onChange={(e) => handleCategoryChange(e.target.value)}
               className="select-field text-[13px] py-2"
             >
-              <option value={-1}>Choose...</option>
+              <option value={-1}>Select {categoryLabel}...</option>
               {categories.map((c, i) => (
                 <option key={c.name} value={i}>
                   {c.name}
@@ -111,7 +111,7 @@ export function InlinePicker({
               disabled={!selectedCategory}
               className="select-field text-[13px] py-2"
             >
-              <option value={-1}>Choose...</option>
+              <option value={-1}>Select {itemLabel}...</option>
               {selectedCategory?.items.map((m, i) => (
                 <option key={m.name} value={i}>
                   {m.name}
