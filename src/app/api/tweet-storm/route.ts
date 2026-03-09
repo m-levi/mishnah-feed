@@ -1,5 +1,4 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { NextResponse } from "next/server";
 import { fetchTexts } from "@/lib/sefaria";
 import type { StormTweet, SourceType } from "@/lib/types";
 
@@ -40,7 +39,7 @@ export async function POST(req: Request) {
     };
 
     if (!slug || !ref || !sourceType) {
-      return NextResponse.json(
+      return Response.json(
         { error: "Missing slug, ref, or sourceType" },
         { status: 400 }
       );
@@ -49,122 +48,166 @@ export async function POST(req: Request) {
     const texts = await fetchTexts(slug, ref);
 
     if (texts.length === 0) {
-      return NextResponse.json(
-        { error: "No texts found" },
-        { status: 404 }
-      );
+      return Response.json({ error: "No texts found" }, { status: 404 });
     }
 
+    const displayRef = slug.replace(/_/g, " ") + " " + ref;
     const textList = texts
-      .map((t) => `--- ${t.ref} ---\nHebrew: ${t.hebrew}\nEnglish: ${t.english}`)
+      .map(
+        (t) =>
+          `--- ${t.ref} ---\nHebrew: ${t.hebrew}\nEnglish: ${t.english}`
+      )
       .join("\n\n");
 
     const context = sourceTypeContext[sourceType];
 
-    const message = await client.messages.create({
-      model: "claude-sonnet-4-20250514",
-      max_tokens: 8000,
-      messages: [
-        {
-          role: "user",
-          content: `${context}
+    const prompt = `${context}
 
 Write a tweet storm (Twitter thread) breaking down the following text. Make it engaging, clear, and punchy — like a viral thread that makes people want to learn more Torah.
 
+CRITICAL OUTPUT FORMAT: Output one JSON object per line. No other text before, after, or between lines. No markdown code fences. Every line must be independently parseable as JSON:
+{"n":1,"text":"1/ The hook tweet..."}
+{"n":2,"text":"2/ Next insight...","img":"detailed educational image prompt: clean diagram with labels on white background"}
+{"n":3,"text":"3/ The takeaway..."}
+
 Rules:
-- Start with a hook tweet that grabs attention
-- Break down the key concepts clearly
+- Each tweet ≤ 280 characters
+- Use thread numbering (1/, 2/, etc.)
+- Start with an attention-grabbing hook
+- Break down key concepts clearly
 - Add context where helpful (who are the Tanna'im/Amora'im, what's the background)
 - End with a powerful takeaway or mussar insight
-- Each tweet must be <=280 characters
-- Use thread numbering (1/, 2/, etc.)
-- No full Hebrew text — this is the English breakdown (but feel free to quote key Hebrew terms)
-
-IMPORTANT - Illustrations: You MUST include exactly 2 tweets that get images. Every Torah text has visual concepts. Think creatively: physical objects, spatial layouts, diagrams of halachic measurements, timelines of machlokes, infographics comparing opinions, architectural diagrams, agricultural scenes, conceptual illustrations. Write detailed image prompts describing clean educational diagrams with labels on a white background.
+- No full Hebrew text — English breakdown quoting key Hebrew terms
+- Include EXACTLY 2 tweets with "img" field containing detailed image prompts for clean educational illustrations with labels on white background
+- Omit "img" field entirely for non-image tweets
+- Aim for 6-10 tweets total
 
 Here is the text:
 
-${textList}
+${textList}`;
 
-Respond with ONLY valid JSON (no markdown, no code fences):
-{
-  "storms": [
-    {
-      "ref": "the reference",
-      "tweets": [
-        "1/ The hook tweet...",
-        "2/ Next point...",
-        "3/ The takeaway..."
-      ],
-      "imageTweets": [
-        { "index": 0, "prompt": "detailed image description" }
-      ]
-    }
-  ]
-}`,
-        },
-      ],
+    const encoder = new TextEncoder();
+
+    const readable = new ReadableStream({
+      async start(controller) {
+        try {
+          const stream = client.messages.stream({
+            model: "claude-sonnet-4-20250514",
+            max_tokens: 8000,
+            messages: [{ role: "user", content: prompt }],
+          });
+
+          let buffer = "";
+          let tweetIndex = 0;
+
+          for await (const event of stream) {
+            if (
+              event.type === "content_block_delta" &&
+              event.delta.type === "text_delta"
+            ) {
+              buffer += event.delta.text;
+
+              // Extract complete lines
+              const lines = buffer.split("\n");
+              buffer = lines.pop()!;
+
+              for (const line of lines) {
+                const trimmed = line.trim();
+                if (
+                  !trimmed ||
+                  trimmed === "```" ||
+                  trimmed === "```json" ||
+                  trimmed === "```jsonl"
+                )
+                  continue;
+
+                try {
+                  const parsed = JSON.parse(trimmed);
+                  if (!parsed.text) continue;
+
+                  const tweet: StormTweet = {
+                    id: `storm-${slug}-${tweetIndex}`,
+                    ref: displayRef,
+                    slug,
+                    sourceRef: ref,
+                    tweetNumber: parsed.n || tweetIndex + 1,
+                    totalTweets: 0,
+                    text: parsed.text,
+                    needsImage: !!parsed.img,
+                    imagePrompt: parsed.img || undefined,
+                  };
+
+                  controller.enqueue(
+                    encoder.encode(
+                      `data: ${JSON.stringify(tweet)}\n\n`
+                    )
+                  );
+                  tweetIndex++;
+                } catch {
+                  // Skip malformed lines
+                }
+              }
+            }
+          }
+
+          // Process remaining buffer
+          const remaining = buffer.trim();
+          if (remaining && remaining !== "```") {
+            try {
+              const parsed = JSON.parse(remaining);
+              if (parsed.text) {
+                const tweet: StormTweet = {
+                  id: `storm-${slug}-${tweetIndex}`,
+                  ref: displayRef,
+                  slug,
+                  sourceRef: ref,
+                  tweetNumber: parsed.n || tweetIndex + 1,
+                  totalTweets: 0,
+                  text: parsed.text,
+                  needsImage: !!parsed.img,
+                  imagePrompt: parsed.img || undefined,
+                };
+                controller.enqueue(
+                  encoder.encode(
+                    `data: ${JSON.stringify(tweet)}\n\n`
+                  )
+                );
+                tweetIndex++;
+              }
+            } catch {
+              // Skip
+            }
+          }
+
+          // Send done signal
+          controller.enqueue(
+            encoder.encode(
+              `data: ${JSON.stringify({ done: true, total: tweetIndex })}\n\n`
+            )
+          );
+        } catch (error) {
+          console.error("Tweet storm streaming error:", error);
+          controller.enqueue(
+            encoder.encode(
+              `data: ${JSON.stringify({ error: "Failed to generate tweet storm" })}\n\n`
+            )
+          );
+        } finally {
+          controller.close();
+        }
+      },
     });
 
-    if (message.stop_reason === "max_tokens") {
-      return NextResponse.json(
-        { error: "Response too long — try a smaller selection" },
-        { status: 500 }
-      );
-    }
-
-    const textBlock = message.content.find((block) => block.type === "text");
-    if (!textBlock || textBlock.type !== "text") {
-      return NextResponse.json(
-        { error: "No text response from Claude" },
-        { status: 500 }
-      );
-    }
-
-    let jsonText = textBlock.text.trim();
-    if (jsonText.startsWith("```")) {
-      jsonText = jsonText.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "");
-    }
-
-    const parsed = JSON.parse(jsonText);
-
-    const stormTweets: StormTweet[] = [];
-    for (const storm of parsed.storms) {
-      // Build a map of image tweet indices to their prompts
-      const imageMap = new Map<number, string>();
-      const imageTweets = storm.imageTweets || [];
-      for (const img of imageTweets) {
-        if (img && typeof img.index === "number") {
-          // Claude may use "prompt", "imagePrompt", or "description"
-          const prompt = img.prompt || img.imagePrompt || img.description || "";
-          if (prompt) imageMap.set(img.index, prompt);
-        }
-      }
-      // Also support legacy single imageTweet field
-      if (imageMap.size === 0 && storm.imageTweet != null && storm.imagePrompt) {
-        imageMap.set(storm.imageTweet, storm.imagePrompt);
-      }
-
-      for (let i = 0; i < storm.tweets.length; i++) {
-        const imagePrompt = imageMap.get(i);
-        stormTweets.push({
-          id: `storm-${storm.ref}-${i}`,
-          ref: storm.ref,
-          slug,
-          sourceRef: ref,
-          tweetNumber: i + 1,
-          totalTweets: storm.tweets.length,
-          text: storm.tweets[i],
-          needsImage: !!imagePrompt,
-          imagePrompt: imagePrompt,
-        });
-      }
-    }
-
-    return NextResponse.json({ tweets: stormTweets });
+    return new Response(readable, {
+      headers: {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        Connection: "keep-alive",
+      },
+    });
   } catch (error) {
     console.error("Tweet storm error:", error);
-    return NextResponse.json(
+    return Response.json(
       { error: "Failed to generate tweet storm" },
       { status: 500 }
     );

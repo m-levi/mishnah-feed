@@ -1,5 +1,4 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { NextResponse } from "next/server";
 import { getCategories, getDafOptions } from "@/lib/source-data";
 import { fetchTexts } from "@/lib/sefaria";
 import type { StormTweet, SourceType } from "@/lib/types";
@@ -47,7 +46,6 @@ function pickRandomItems(count: number) {
 
 export async function POST() {
   try {
-    // Pick 4 random sources
     const picks = pickRandomItems(4);
 
     // Fetch texts concurrently
@@ -55,7 +53,6 @@ export async function POST() {
       picks.map((p) => fetchTexts(p.slug, p.ref))
     );
 
-    // Filter successful fetches
     const validTexts: {
       pick: (typeof picks)[0];
       texts: Awaited<ReturnType<typeof fetchTexts>>;
@@ -63,16 +60,13 @@ export async function POST() {
 
     for (let i = 0; i < textResults.length; i++) {
       const result = textResults[i];
-      if (
-        result.status === "fulfilled" &&
-        result.value.length > 0
-      ) {
+      if (result.status === "fulfilled" && result.value.length > 0) {
         validTexts.push({ pick: picks[i], texts: result.value });
       }
     }
 
     if (validTexts.length === 0) {
-      return NextResponse.json(
+      return Response.json(
         { error: "Could not fetch any texts" },
         { status: 500 }
       );
@@ -88,92 +82,155 @@ export async function POST() {
       })
       .join("\n\n");
 
-    const message = await client.messages.create({
-      model: "claude-sonnet-4-20250514",
-      max_tokens: 4000,
-      messages: [
-        {
-          role: "user",
-          content: `You are an engaging Torah educator for a frum audience. Create a discovery feed mixing insights from different Torah sources.
+    const prompt = `You are an engaging Torah educator for a frum audience. Create a discovery feed mixing insights from different Torah sources.
 
 Use standard Orthodox terminology: "Hashem" not "God", "tefillah" not "prayer", "brachos" not "blessings", "halacha", "mitzva/mitzvos", "Chazal", etc.
 
-For each source below, write 2-3 punchy, engaging tweets (max 280 chars each). Make each one grab attention and teach something interesting. Use thread numbering (1/, 2/, etc.) within each source.
+CRITICAL OUTPUT FORMAT: Output one JSON object per line. No other text. No markdown code fences. Every line must be independently parseable as JSON:
+{"ref":"Source Name","n":1,"text":"1/ Engaging tweet..."}
+{"ref":"Source Name","n":2,"text":"2/ Another tweet...","img":"detailed educational image prompt"}
+{"ref":"Different Source","n":1,"text":"1/ New topic hook..."}
 
-Include exactly 2 image tweets across the entire feed. Choose tweets where a visual would help. Write detailed image prompts for clean educational illustrations with labels on white background.
+Rules:
+- For each source, write 2-3 punchy tweets (≤280 chars each)
+- Use thread numbering that resets per source (1/, 2/, etc.)
+- "ref" field must match the source name EXACTLY as given above
+- Include exactly 2 tweets total with "img" field across the entire feed (creative visuals, diagrams, illustrations)
+- Make each tweet engaging and teach something interesting
 
 Sources:
-${textList}
+${textList}`;
 
-Respond with ONLY valid JSON (no markdown, no code fences):
-{
-  "storms": [
-    {
-      "ref": "source display name",
-      "tweets": ["1/ tweet...", "2/ tweet..."],
-      "imageTweets": [{ "index": 0, "prompt": "detailed image description" }]
-    }
-  ]
-}`,
-        },
-      ],
+    const encoder = new TextEncoder();
+
+    const readable = new ReadableStream({
+      async start(controller) {
+        try {
+          const stream = client.messages.stream({
+            model: "claude-sonnet-4-20250514",
+            max_tokens: 4000,
+            messages: [{ role: "user", content: prompt }],
+          });
+
+          let buffer = "";
+          let tweetIndex = 0;
+
+          for await (const event of stream) {
+            if (
+              event.type === "content_block_delta" &&
+              event.delta.type === "text_delta"
+            ) {
+              buffer += event.delta.text;
+
+              const lines = buffer.split("\n");
+              buffer = lines.pop()!;
+
+              for (const line of lines) {
+                const trimmed = line.trim();
+                if (
+                  !trimmed ||
+                  trimmed === "```" ||
+                  trimmed === "```json" ||
+                  trimmed === "```jsonl"
+                )
+                  continue;
+
+                try {
+                  const parsed = JSON.parse(trimmed);
+                  if (!parsed.text) continue;
+
+                  // Match back to pick for slug/sourceRef
+                  const matchingPick = validTexts.find(
+                    (vt) => vt.pick.displayName === parsed.ref
+                  )?.pick;
+
+                  const tweet: StormTweet = {
+                    id: `discover-${tweetIndex}`,
+                    ref: parsed.ref || "Torah",
+                    slug: matchingPick?.slug,
+                    sourceRef: matchingPick?.ref,
+                    tweetNumber: parsed.n || 1,
+                    totalTweets: 0,
+                    text: parsed.text,
+                    needsImage: !!parsed.img,
+                    imagePrompt: parsed.img || undefined,
+                  };
+
+                  controller.enqueue(
+                    encoder.encode(
+                      `data: ${JSON.stringify(tweet)}\n\n`
+                    )
+                  );
+                  tweetIndex++;
+                } catch {
+                  // Skip malformed lines
+                }
+              }
+            }
+          }
+
+          // Process remaining buffer
+          const remaining = buffer.trim();
+          if (remaining && remaining !== "```") {
+            try {
+              const parsed = JSON.parse(remaining);
+              if (parsed.text) {
+                const matchingPick = validTexts.find(
+                  (vt) => vt.pick.displayName === parsed.ref
+                )?.pick;
+
+                const tweet: StormTweet = {
+                  id: `discover-${tweetIndex}`,
+                  ref: parsed.ref || "Torah",
+                  slug: matchingPick?.slug,
+                  sourceRef: matchingPick?.ref,
+                  tweetNumber: parsed.n || 1,
+                  totalTweets: 0,
+                  text: parsed.text,
+                  needsImage: !!parsed.img,
+                  imagePrompt: parsed.img || undefined,
+                };
+
+                controller.enqueue(
+                  encoder.encode(
+                    `data: ${JSON.stringify(tweet)}\n\n`
+                  )
+                );
+                tweetIndex++;
+              }
+            } catch {
+              // Skip
+            }
+          }
+
+          controller.enqueue(
+            encoder.encode(
+              `data: ${JSON.stringify({ done: true, total: tweetIndex })}\n\n`
+            )
+          );
+        } catch (error) {
+          console.error("Discover streaming error:", error);
+          controller.enqueue(
+            encoder.encode(
+              `data: ${JSON.stringify({ error: "Failed to generate discovery feed" })}\n\n`
+            )
+          );
+        } finally {
+          controller.close();
+        }
+      },
     });
 
-    const textBlock = message.content.find((b) => b.type === "text");
-    if (!textBlock || textBlock.type !== "text") {
-      return NextResponse.json(
-        { error: "No response" },
-        { status: 500 }
-      );
-    }
-
-    let jsonText = textBlock.text.trim();
-    if (jsonText.startsWith("```")) {
-      jsonText = jsonText
-        .replace(/^```(?:json)?\n?/, "")
-        .replace(/\n?```$/, "");
-    }
-
-    const parsed = JSON.parse(jsonText);
-
-    const stormTweets: StormTweet[] = [];
-    let globalIndex = 0;
-
-    for (let stormIdx = 0; stormIdx < parsed.storms.length; stormIdx++) {
-      const storm = parsed.storms[stormIdx];
-      const pick = validTexts[Math.min(stormIdx, validTexts.length - 1)]?.pick;
-
-      const imageMap = new Map<number, string>();
-      const imageTweets = storm.imageTweets || [];
-      for (const img of imageTweets) {
-        if (img && typeof img.index === "number") {
-          const prompt =
-            img.prompt || img.imagePrompt || img.description || "";
-          if (prompt) imageMap.set(img.index, prompt);
-        }
-      }
-
-      for (let i = 0; i < storm.tweets.length; i++) {
-        const imagePrompt = imageMap.get(i);
-        stormTweets.push({
-          id: `discover-${globalIndex}`,
-          ref: storm.ref,
-          slug: pick?.slug,
-          sourceRef: pick?.ref,
-          tweetNumber: i + 1,
-          totalTweets: storm.tweets.length,
-          text: storm.tweets[i],
-          needsImage: !!imagePrompt,
-          imagePrompt,
-        });
-        globalIndex++;
-      }
-    }
-
-    return NextResponse.json({ tweets: stormTweets });
+    return new Response(readable, {
+      headers: {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        Connection: "keep-alive",
+      },
+    });
   } catch (error) {
     console.error("Discover error:", error);
-    return NextResponse.json(
+    return Response.json(
       { error: "Failed to generate discovery feed" },
       { status: 500 }
     );

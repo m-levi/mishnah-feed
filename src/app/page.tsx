@@ -29,6 +29,66 @@ interface FeedCache {
   selection: string;
 }
 
+// ── SSE stream consumer ────────────────────────────────────
+async function readStream(
+  response: Response,
+  signal: AbortSignal,
+  onTweet: (tweet: StormTweet) => void,
+  onDone: (total: number) => void,
+  onError: (msg: string) => void
+) {
+  const reader = response.body!.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (signal.aborted) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const parts = buffer.split("\n\n");
+      buffer = parts.pop()!;
+
+      for (const part of parts) {
+        const line = part.trim();
+        if (!line.startsWith("data: ")) continue;
+        const data = line.slice(6);
+
+        try {
+          const parsed = JSON.parse(data);
+          if (parsed.error) {
+            onError(parsed.error);
+            return;
+          }
+          if (parsed.done) {
+            onDone(parsed.total);
+            return;
+          }
+          onTweet(parsed as StormTweet);
+        } catch {
+          // Skip unparseable events
+        }
+      }
+    }
+
+    // Stream ended without done event — finalize anyway
+    onDone(0);
+  } catch {
+    if (!signal.aborted) {
+      onError("Connection lost. Please try again.");
+    }
+  } finally {
+    try {
+      reader.cancel();
+    } catch {
+      // Already closed
+    }
+  }
+}
+
+// ── Main component ─────────────────────────────────────────
 export default function HomePage() {
   const [activeTab, setActiveTab] = useState<TabKey>("foryou");
   const [tweets, setTweets] = useState<StormTweet[]>([]);
@@ -54,13 +114,19 @@ export default function HomePage() {
     }
   );
 
+  // Active stream abort controller
+  const activeStreamRef = useRef<AbortController | null>(null);
+
+  const abortActiveStream = useCallback(() => {
+    if (activeStreamRef.current) {
+      activeStreamRef.current.abort();
+      activeStreamRef.current = null;
+    }
+  }, []);
+
   // Swipe tracking
   const touchStartRef = useRef<{ x: number; y: number } | null>(null);
   const touchEndRef = useRef<number | null>(null);
-  const swipeAreaRef = useRef<HTMLDivElement>(null);
-
-  // Tab indicator ref for animation
-  const tabRowRef = useRef<HTMLDivElement>(null);
 
   // Auto-load discovery feed on first mount
   useEffect(() => {
@@ -70,7 +136,11 @@ export default function HomePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const loadDiscoverFeed = async () => {
+  const loadDiscoverFeed = useCallback(async () => {
+    abortActiveStream();
+    const controller = new AbortController();
+    activeStreamRef.current = controller;
+
     setIsLoading(true);
     setTweets([]);
     setError(null);
@@ -83,28 +153,68 @@ export default function HomePage() {
       const res = await fetch("/api/discover", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: controller.signal,
       });
+
       if (!res.ok) throw new Error("Failed to generate");
-      const data = await res.json();
-      setTweets(data.tweets);
-      // Cache immediately
-      feedCacheRef.current["foryou"] = {
-        tweets: data.tweets,
-        selection: "For You",
-      };
-    } catch {
-      setError("Failed to load feed. Tap refresh to try again.");
+
+      await readStream(
+        res,
+        controller.signal,
+        (tweet) => {
+          if (!controller.signal.aborted) {
+            setTweets((prev) => [...prev, tweet]);
+          }
+        },
+        () => {
+          if (!controller.signal.aborted) {
+            setTweets((prev) => {
+              // Compute per-ref totals for discover feed
+              const refCounts = new Map<string, number>();
+              prev.forEach((t) =>
+                refCounts.set(t.ref, (refCounts.get(t.ref) || 0) + 1)
+              );
+              const updated = prev.map((t) => ({
+                ...t,
+                totalTweets: refCounts.get(t.ref) || 1,
+              }));
+              feedCacheRef.current["foryou"] = {
+                tweets: updated,
+                selection: "For You",
+              };
+              return updated;
+            });
+          }
+        },
+        (msg) => {
+          if (!controller.signal.aborted) setError(msg);
+        }
+      );
+    } catch (err) {
+      if (
+        err instanceof DOMException &&
+        err.name === "AbortError"
+      )
+        return;
+      if (!controller.signal.aborted) {
+        setError("Failed to load feed. Tap refresh to try again.");
+      }
     } finally {
-      setIsLoading(false);
+      if (!controller.signal.aborted) setIsLoading(false);
+      if (activeStreamRef.current === controller) {
+        activeStreamRef.current = null;
+      }
     }
-  };
+  }, [abortActiveStream]);
 
   const handleTabChange = useCallback(
     (tab: TabKey) => {
       if (tab === activeTab) return;
 
-      // Save current tab's feed to cache (if we have tweets)
-      if (tweets.length > 0 && !isLoading) {
+      abortActiveStream();
+
+      // Save current tab's feed to cache
+      if (tweets.length > 0) {
         feedCacheRef.current[activeTab] = {
           tweets: [...tweets],
           selection: currentSelection,
@@ -115,13 +225,13 @@ export default function HomePage() {
       setShareUrl(null);
       setCopied(false);
       setError(null);
+      setIsLoading(false);
 
-      // Try to restore from cache
+      // Restore from cache or load fresh
       const cached = feedCacheRef.current[tab];
       if (cached && cached.tweets.length > 0) {
         setTweets(cached.tweets);
         setCurrentSelection(cached.selection);
-        setIsLoading(false);
       } else if (tab === "foryou") {
         loadDiscoverFeed();
       } else {
@@ -129,8 +239,7 @@ export default function HomePage() {
         setCurrentSelection("");
       }
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [activeTab, tweets, currentSelection, isLoading]
+    [activeTab, tweets, currentSelection, abortActiveStream, loadDiscoverFeed]
   );
 
   const handleSelect = useCallback(
@@ -140,6 +249,10 @@ export default function HomePage() {
       sourceType: SourceType,
       displayName: string
     ) => {
+      abortActiveStream();
+      const controller = new AbortController();
+      activeStreamRef.current = controller;
+
       setIsLoading(true);
       setTweets([]);
       setError(null);
@@ -153,22 +266,56 @@ export default function HomePage() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ slug, ref, sourceType }),
+          signal: controller.signal,
         });
+
         if (!res.ok) throw new Error("Failed to generate");
-        const data = await res.json();
-        setTweets(data.tweets);
-        // Cache this feed
-        feedCacheRef.current[activeTab] = {
-          tweets: data.tweets,
-          selection: displayName,
-        };
-      } catch {
-        setError("Failed to load. Please try again.");
+
+        await readStream(
+          res,
+          controller.signal,
+          (tweet) => {
+            if (!controller.signal.aborted) {
+              setTweets((prev) => [...prev, tweet]);
+            }
+          },
+          (total) => {
+            if (!controller.signal.aborted) {
+              setTweets((prev) => {
+                const count = total || prev.length;
+                const updated = prev.map((t) => ({
+                  ...t,
+                  totalTweets: count,
+                }));
+                feedCacheRef.current[activeTab] = {
+                  tweets: updated,
+                  selection: displayName,
+                };
+                return updated;
+              });
+            }
+          },
+          (msg) => {
+            if (!controller.signal.aborted) setError(msg);
+          }
+        );
+      } catch (err) {
+        if (
+          err instanceof DOMException &&
+          err.name === "AbortError"
+        )
+          return;
+        if (!controller.signal.aborted) {
+          setError("Failed to load. Please try again.");
+        }
       } finally {
-        setIsLoading(false);
+        if (!controller.signal.aborted) setIsLoading(false);
+        if (activeStreamRef.current === controller) {
+          activeStreamRef.current = null;
+        }
       }
     },
-    [activeTab]
+    [activeTab, abortActiveStream]
   );
 
   const handleUpdateTweet = useCallback(
@@ -180,7 +327,7 @@ export default function HomePage() {
     []
   );
 
-  // Async image loading
+  // Async image loading — fires as tweets stream in
   useEffect(() => {
     if (tweets.length === 0) return;
 
@@ -259,21 +406,15 @@ export default function HomePage() {
 
   const handleTouchEnd = useCallback(() => {
     if (!touchStartRef.current || touchEndRef.current === null) return;
-
     const distanceX = touchStartRef.current.x - touchEndRef.current;
-    const minSwipeDistance = 60;
-
-    // Only swipe if horizontal distance is significant
-    if (Math.abs(distanceX) < minSwipeDistance) return;
+    if (Math.abs(distanceX) < 60) return;
 
     const tabKeys = tabs.map((t) => t.key);
     const currentIndex = tabKeys.indexOf(activeTab);
 
     if (distanceX > 0 && currentIndex < tabKeys.length - 1) {
-      // Swipe left → next tab
       handleTabChange(tabKeys[currentIndex + 1]);
     } else if (distanceX < 0 && currentIndex > 0) {
-      // Swipe right → prev tab
       handleTabChange(tabKeys[currentIndex - 1]);
     }
 
@@ -314,21 +455,20 @@ export default function HomePage() {
     [activeTab]
   );
 
-  const showFeed = !isLoading && tweets.length > 0;
+  const hasTweets = tweets.length > 0;
+  const showFeed = hasTweets;
   const showEmpty =
-    !isLoading && tweets.length === 0 && activeTab !== "foryou" && !error;
+    !isLoading && !hasTweets && activeTab !== "foryou" && !error;
+  const showSkeletons = isLoading && !hasTweets;
   const imagesLoading = tweets.some((t) => t.imageLoading);
   const imagesTotal = tweets.filter((t) => t.needsImage).length;
   const imagesDone = tweets.filter((t) => t.needsImage && t.imageData).length;
-
-  // Tab indicator position
   const activeTabIndex = tabs.findIndex((t) => t.key === activeTab);
 
   return (
     <div className="min-h-screen bg-[var(--bg)]">
       {/* Header */}
       <div className="sticky top-0 z-10 bg-[var(--card-bg)]/95 backdrop-blur-md border-b border-[var(--border)] no-print">
-        {/* Top row: logo + actions */}
         <div className="max-w-2xl mx-auto px-4 pt-3 pb-1 flex items-center justify-between">
           <h1
             className="text-lg font-semibold text-[var(--text)]"
@@ -350,7 +490,7 @@ export default function HomePage() {
                 />
               </button>
             )}
-            {showFeed && (
+            {showFeed && !isLoading && (
               <button
                 onClick={handleShare}
                 disabled={isSharing}
@@ -364,7 +504,7 @@ export default function HomePage() {
         </div>
 
         {/* Tab row */}
-        <div className="max-w-2xl mx-auto relative" ref={tabRowRef}>
+        <div className="max-w-2xl mx-auto relative">
           <div className="flex">
             {tabs.map((tab) => (
               <button
@@ -411,6 +551,9 @@ export default function HomePage() {
                 {currentSelection}
               </span>
               {" "}&middot; {tweets.length} tweets
+              {isLoading && (
+                <span className="text-[var(--accent)]"> &middot; generating...</span>
+              )}
             </p>
             {imagesLoading && (
               <span className="text-[11px] text-[var(--accent)] bg-[var(--accent-light)] px-2 py-0.5 rounded-full font-medium">
@@ -452,13 +595,12 @@ export default function HomePage() {
 
       {/* Swipeable content area */}
       <div
-        ref={swipeAreaRef}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
       >
-        {/* Loading skeletons */}
-        {isLoading && (
+        {/* Loading skeletons — only when no tweets yet */}
+        {showSkeletons && (
           <div>
             {Array.from({ length: 6 }, (_, i) => (
               <TweetSkeleton key={i} index={i} />
@@ -477,7 +619,7 @@ export default function HomePage() {
           </div>
         )}
 
-        {/* Feed */}
+        {/* Feed — shows progressively as tweets stream in */}
         {showFeed && (
           <div>
             {tweets.map((tweet, i) => (
@@ -489,6 +631,16 @@ export default function HomePage() {
                 <StormCard tweet={tweet} onTap={setSelectedTweet} />
               </div>
             ))}
+
+            {/* Streaming indicator */}
+            {isLoading && (
+              <div className="flex justify-center py-6">
+                <span className="text-xs text-[var(--muted)] bg-[var(--card-bg)] px-4 py-2 rounded-full border border-[var(--border)] flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent)] animate-pulse" />
+                  Generating more...
+                </span>
+              </div>
+            )}
           </div>
         )}
       </div>
