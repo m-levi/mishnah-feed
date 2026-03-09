@@ -40,3 +40,5 @@ export interface SavedStorm {
 }
 
 export type SourceType = "mishnayos" | "gemara" | "chumash";
+
+export type FeedMode = "study" | "discover";

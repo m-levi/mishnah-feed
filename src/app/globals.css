@@ -1,19 +1,25 @@
 @import "tailwindcss";
 
 :root {
-  --bg: #f5f8fa;
-  --text: #0f1419;
-  --muted: #536471;
-  --border: #e1e8ed;
-  --accent: #1d9bf0;
-  --accent-hover: #1a8cd8;
-  --card-bg: #ffffff;
-  --thread-line: #cfd9de;
-  --highlight: #f7f9fa;
+  --bg: #F9F8F6;
+  --card-bg: #FFFFFF;
+  --text: #1A1A1A;
+  --text-secondary: #4A4A4A;
+  --muted: #9CA3AF;
+  --border: #E8E6E3;
+  --accent: #B45309;
+  --accent-hover: #92400E;
+  --accent-light: #FFFBEB;
+  --accent-muted: #FDE68A;
+  --thread: #D97706;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.03);
+  --shadow: 0 1px 3px rgba(0, 0, 0, 0.05), 0 1px 2px rgba(0, 0, 0, 0.03);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.06);
 }
 
 * {
   box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
 }
 
 body {
@@ -21,46 +27,108 @@ body {
   color: var(--text);
 }
 
-/* Image shimmer loading effect */
+/* Shimmer */
 @keyframes shimmer {
   0% { background-position: -400px 0; }
   100% { background-position: 400px 0; }
 }
 
-.image-shimmer {
-  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+.shimmer {
+  background: linear-gradient(90deg, #F0EEEB 25%, #E6E3DF 50%, #F0EEEB 75%);
   background-size: 400px 100%;
   animation: shimmer 1.8s ease-in-out infinite;
 }
 
-/* Fade-in for loaded images */
+/* Fade in with slide */
 @keyframes fadeIn {
-  from { opacity: 0; transform: scale(0.98); }
-  to { opacity: 1; transform: scale(1); }
-}
-
-.image-fade-in {
-  animation: fadeIn 0.4s ease-out;
-}
-
-/* Subtle slide-up for cards */
-@keyframes slideUp {
   from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
-.card-enter {
-  animation: slideUp 0.3s ease-out;
+.fade-in {
+  animation: fadeIn 0.4s ease-out both;
 }
 
+/* Image fade */
+@keyframes imgReveal {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.img-reveal {
+  animation: imgReveal 0.5s ease-out;
+}
+
+/* Modal slide up */
+@keyframes slideUp {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+@keyframes overlayIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.modal-overlay {
+  animation: overlayIn 0.2s ease-out;
+}
+
+.modal-sheet {
+  animation: slideUp 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Pulse dots */
+@keyframes dotPulse {
+  0%, 80%, 100% { transform: scale(0.6); opacity: 0.3; }
+  40% { transform: scale(1); opacity: 1; }
+}
+
+.dot-pulse span:nth-child(1) { animation: dotPulse 1.4s ease-in-out infinite; }
+.dot-pulse span:nth-child(2) { animation: dotPulse 1.4s ease-in-out infinite 0.2s; }
+.dot-pulse span:nth-child(3) { animation: dotPulse 1.4s ease-in-out infinite 0.4s; }
+
+/* Skeleton pulse */
+@keyframes skeletonPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.skeleton-pulse {
+  animation: skeletonPulse 2s ease-in-out infinite;
+}
+
+/* Select styling */
+.select-field {
+  width: 100%;
+  padding: 10px 32px 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background-color: var(--card-bg);
+  font-size: 14px;
+  color: var(--text);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  appearance: none;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239CA3AF' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-position: right 12px center;
+  background-repeat: no-repeat;
+}
+
+.select-field:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(180, 83, 9, 0.08);
+}
+
+.select-field:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+/* Print */
 @media print {
-  body {
-    background: white;
-  }
-  .print\:hidden {
-    display: none !important;
-  }
-  article {
-    break-inside: avoid;
-  }
+  body { background: white; }
+  .no-print { display: none !important; }
+  article { break-inside: avoid; }
 }

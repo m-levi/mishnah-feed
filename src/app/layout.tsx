@@ -1,15 +1,30 @@
-import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import type { Metadata, Viewport } from "next";
+import { Newsreader, DM_Sans } from "next/font/google";
 import "./globals.css";
 
-const inter = Inter({
-  variable: "--font-inter",
+const newsreader = Newsreader({
+  variable: "--font-display",
   subsets: ["latin"],
+  display: "swap",
+});
+
+const dmSans = DM_Sans({
+  variable: "--font-body",
+  subsets: ["latin"],
+  display: "swap",
 });
 
 export const metadata: Metadata = {
   title: "MishnahFeed",
-  description: "Learn Mishnah in bite-sized tweets",
+  description:
+    "Torah learning, reimagined — bite-sized insights from Mishnah, Gemara, and Tanakh",
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  viewportFit: "cover",
 };
 
 export default function RootLayout({
@@ -20,10 +35,10 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
-        className={`${inter.variable} antialiased`}
+        className={`${newsreader.variable} ${dmSans.variable} antialiased`}
         style={{
           fontFamily:
-            "var(--font-inter), -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+            "var(--font-body), -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
         }}
       >
         {children}
