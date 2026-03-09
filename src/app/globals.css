@@ -1,0 +1,66 @@
+@import "tailwindcss";
+
+:root {
+  --bg: #f5f8fa;
+  --text: #0f1419;
+  --muted: #536471;
+  --border: #e1e8ed;
+  --accent: #1d9bf0;
+  --accent-hover: #1a8cd8;
+  --card-bg: #ffffff;
+  --thread-line: #cfd9de;
+  --highlight: #f7f9fa;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+}
+
+/* Image shimmer loading effect */
+@keyframes shimmer {
+  0% { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
+
+.image-shimmer {
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 400px 100%;
+  animation: shimmer 1.8s ease-in-out infinite;
+}
+
+/* Fade-in for loaded images */
+@keyframes fadeIn {
+  from { opacity: 0; transform: scale(0.98); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.image-fade-in {
+  animation: fadeIn 0.4s ease-out;
+}
+
+/* Subtle slide-up for cards */
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.card-enter {
+  animation: slideUp 0.3s ease-out;
+}
+
+@media print {
+  body {
+    background: white;
+  }
+  .print\:hidden {
+    display: none !important;
+  }
+  article {
+    break-inside: avoid;
+  }
+}
