@@ -29,11 +29,19 @@ export function StormCard({ tweet, onTap }: StormCardProps) {
   const isLast = tweet.tweetNumber === tweet.totalTweets;
 
   const [liked, setLiked] = useState(false);
+  const [bookmarked, setBookmarked] = useState(false);
   const [copied, setCopied] = useState(false);
   const [likeAnim, setLikeAnim] = useState(false);
 
   useEffect(() => {
     setLiked(getFavorites().includes(tweet.id));
+    try {
+      const saved = localStorage.getItem("mishnah-feed-saved");
+      if (saved) {
+        const list: StormTweet[] = JSON.parse(saved);
+        setBookmarked(list.some((t) => t.id === tweet.id));
+      }
+    } catch {}
   }, [tweet.id]);
 
   const handleLearnMore = (e: React.MouseEvent) => {
@@ -70,17 +78,22 @@ export function StormCard({ tweet, onTap }: StormCardProps) {
     setFavorites(ids);
   };
 
-  const handleSave = async (e: React.MouseEvent) => {
+  const handleSave = (e: React.MouseEvent) => {
     e.stopPropagation();
-    // Save full tweet to a separate "saved" list
+    const newBookmarked = !bookmarked;
+    setBookmarked(newBookmarked);
     try {
       const saved = localStorage.getItem("mishnah-feed-saved");
       const list: StormTweet[] = saved ? JSON.parse(saved) : [];
-      const exists = list.some((t) => t.id === tweet.id);
-      if (!exists) {
-        list.push(tweet);
-        localStorage.setItem("mishnah-feed-saved", JSON.stringify(list));
+      if (newBookmarked) {
+        if (!list.some((t) => t.id === tweet.id)) {
+          list.push(tweet);
+        }
+      } else {
+        const idx = list.findIndex((t) => t.id === tweet.id);
+        if (idx >= 0) list.splice(idx, 1);
       }
+      localStorage.setItem("mishnah-feed-saved", JSON.stringify(list));
     } catch {}
   };
 
@@ -205,12 +218,25 @@ export function StormCard({ tweet, onTap }: StormCardProps) {
 
             {/* Bookmark / save */}
             <button
-              className="flex items-center gap-1 text-[var(--muted)] hover:text-[var(--accent)] transition-colors group cursor-pointer"
+              className={`flex items-center gap-1 transition-colors group cursor-pointer ${
+                bookmarked
+                  ? "text-[var(--accent)]"
+                  : "text-[var(--muted)] hover:text-[var(--accent)]"
+              }`}
               onClick={handleSave}
-              title="Save for later"
+              title={bookmarked ? "Remove bookmark" : "Bookmark"}
             >
-              <div className="p-1.5 rounded-full group-hover:bg-[var(--accent)]/10 transition-colors">
-                <Bookmark className="w-4 h-4" />
+              <div
+                className={`p-1.5 rounded-full transition-colors ${
+                  bookmarked
+                    ? "bg-[var(--accent)]/10"
+                    : "group-hover:bg-[var(--accent)]/10"
+                }`}
+              >
+                <Bookmark
+                  className="w-4 h-4"
+                  fill={bookmarked ? "currentColor" : "none"}
+                />
               </div>
             </button>
           </div>

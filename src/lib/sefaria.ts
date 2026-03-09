@@ -4,6 +4,31 @@ function stripHtml(html: string): string {
   return html.replace(/<[^>]*>/g, "").trim();
 }
 
+// ── In-memory cache for Sefaria responses (1 hour TTL) ────
+const cache = new Map<string, { data: unknown; expires: number }>();
+const CACHE_TTL = 60 * 60 * 1000; // 1 hour
+
+function getCached<T>(key: string): T | null {
+  const entry = cache.get(key);
+  if (!entry) return null;
+  if (Date.now() > entry.expires) {
+    cache.delete(key);
+    return null;
+  }
+  return entry.data as T;
+}
+
+function setCache(key: string, data: unknown) {
+  cache.set(key, { data, expires: Date.now() + CACHE_TTL });
+  // Evict old entries if cache grows too large
+  if (cache.size > 200) {
+    const now = Date.now();
+    for (const [k, v] of cache) {
+      if (now > v.expires) cache.delete(k);
+    }
+  }
+}
+
 export interface Commentary {
   commentator: string;
   text: string;
@@ -16,6 +41,10 @@ export async function fetchCommentary(
   ref: string
 ): Promise<Commentary[]> {
   const fullRef = `${slug}.${ref}`;
+  const cacheKey = `commentary:${fullRef}`;
+  const cached = getCached<Commentary[]>(cacheKey);
+  if (cached) return cached;
+
   const url = `https://www.sefaria.org/api/related/${encodeURIComponent(fullRef)}`;
 
   try {
@@ -50,6 +79,7 @@ export async function fetchCommentary(
       if (results.length >= 8) break;
     }
 
+    setCache(cacheKey, results);
     return results;
   } catch {
     return [];
@@ -61,6 +91,10 @@ export async function fetchTexts(
   ref: string // chapter number like "1" or daf like "2a"
 ): Promise<SourceText[]> {
   const fullRef = `${slug}.${ref}`;
+  const cacheKey = `texts:${fullRef}`;
+  const cached = getCached<SourceText[]>(cacheKey);
+  if (cached) return cached;
+
   const url = `https://www.sefaria.org/api/v3/texts/${fullRef}`;
 
   const res = await fetch(url);
@@ -108,5 +142,6 @@ export async function fetchTexts(
     });
   }
 
+  setCache(cacheKey, results);
   return results;
 }

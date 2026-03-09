@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Newsreader, DM_Sans } from "next/font/google";
+import { AuthProvider } from "@/lib/auth-context";
 import "./globals.css";
 
 const newsreader = Newsreader({
@@ -41,7 +42,7 @@ export default function RootLayout({
             "var(--font-body), -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
         }}
       >
-        {children}
+        <AuthProvider>{children}</AuthProvider>
       </body>
     </html>
   );

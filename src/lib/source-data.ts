@@ -25,6 +25,45 @@ export function getCategories(sourceType: SourceType): SourceCategory[] {
   }
 }
 
+// Look up an item from picker indices
+export function getItemFromState(
+  sourceType: SourceType,
+  categoryIndex: number,
+  itemIndex: number
+): SourceItem | null {
+  const categories = getCategories(sourceType);
+  const cat = categories[categoryIndex];
+  if (!cat) return null;
+  return cat.items[itemIndex] || null;
+}
+
+// Calculate the next ref (next perek, daf, or chapter)
+export function getNextRef(
+  currentRef: string,
+  item: SourceItem
+): { ref: string; displayName: string } | null {
+  if (item.useDaf) {
+    const match = currentRef.match(/^(\d+)([ab])$/);
+    if (!match) return null;
+    const num = parseInt(match[1]);
+    const side = match[2];
+    let nextRef: string;
+    if (side === "a") {
+      nextRef = `${num}b`;
+    } else {
+      if (num + 1 > item.chapters) return null;
+      nextRef = `${num + 1}a`;
+    }
+    return { ref: nextRef, displayName: `${item.name} ${nextRef}` };
+  } else {
+    const perekStr = currentRef.split(".")[0];
+    const num = parseInt(perekStr);
+    if (isNaN(num) || num + 1 > item.chapters) return null;
+    const nextRef = String(num + 1);
+    return { ref: nextRef, displayName: `${item.name} ${nextRef}` };
+  }
+}
+
 // Generate daf options (2a, 2b, 3a, 3b, ... up to maxDaf)
 export function getDafOptions(maxDaf: number): { label: string; value: string }[] {
   const options: { label: string; value: string }[] = [];
