@@ -31,6 +31,7 @@ export interface StormTweet {
   imageData?: string;
   imageMimeType?: string;
   imageLoading?: boolean;
+  label?: string; // contextual label like "This Week's Parsha", "Daf Yomi"
 }
 
 export interface CommentaryTweet {

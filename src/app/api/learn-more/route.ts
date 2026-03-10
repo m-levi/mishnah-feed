@@ -1,9 +1,9 @@
-import Anthropic from "@anthropic-ai/sdk";
+import { ai, GEMINI_TEXT_MODEL } from "@/lib/gemini";
 import { NextResponse } from "next/server";
 import { fetchCommentary } from "@/lib/sefaria";
 import type { CommentaryTweet } from "@/lib/types";
 
-const client = new Anthropic();
+export const runtime = "edge";
 
 export async function POST(req: Request) {
   try {
@@ -78,21 +78,24 @@ Respond with ONLY valid JSON (no markdown, no code fences):
   ]
 }`;
 
-    const message = await client.messages.create({
-      model: "claude-sonnet-4-20250514",
-      max_tokens: 3000,
-      messages: [{ role: "user", content: prompt }],
+    const response = await ai.models.generateContent({
+      model: GEMINI_TEXT_MODEL,
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      config: {
+        thinkingConfig: { thinkingBudget: 1024 },
+        maxOutputTokens: 4000,
+      },
     });
 
-    const textBlock = message.content.find((b) => b.type === "text");
-    if (!textBlock || textBlock.type !== "text") {
-      return NextResponse.json(
-        { error: "No response" },
-        { status: 500 }
-      );
+    // Extract text from non-thinking parts
+    const responseParts = response.candidates?.[0]?.content?.parts || [];
+    let jsonText = "";
+    for (const part of responseParts) {
+      if ((part as Record<string, unknown>).thought) continue;
+      if (part.text) jsonText += part.text;
     }
 
-    let jsonText = textBlock.text.trim();
+    jsonText = jsonText.trim();
     if (jsonText.startsWith("```")) {
       jsonText = jsonText
         .replace(/^```(?:json)?\n?/, "")

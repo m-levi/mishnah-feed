@@ -118,6 +118,13 @@ export function StormCard({ tweet, onTap }: StormCardProps) {
 
         {/* Content */}
         <div className="flex-1 min-w-0 pb-1">
+          {/* Label badge */}
+          {tweet.label && tweet.tweetNumber === 1 && (
+            <span className="inline-block text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-[var(--accent)]/10 text-[var(--accent)] mb-1">
+              {tweet.label}
+            </span>
+          )}
+
           {/* Header row */}
           <div className="flex items-center gap-1.5 mb-0.5">
             <span className="font-bold text-[15px] text-[var(--text)] truncate">

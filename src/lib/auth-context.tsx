@@ -86,18 +86,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const checkUsageLimit = useCallback(() => {
-    if (user) return true;
-    return getUsageToday() < DAILY_LIMIT;
-  }, [user]);
+    return true; // No rate limiting — free for all
+  }, []);
 
   const incrementUsage = useCallback(() => {
-    if (user) return;
-    const newCount = getUsageToday() + 1;
-    setUsageToday(newCount);
-    setUsageCount(newCount);
-  }, [user]);
+    // No-op — no rate limiting
+  }, []);
 
-  const usageRemaining = user ? Infinity : Math.max(0, DAILY_LIMIT - usageCount);
+  const usageRemaining = Infinity;
 
   return (
     <AuthContext.Provider

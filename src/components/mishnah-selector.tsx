@@ -1,6 +1,6 @@
 "use client";
 
-import { getCategories, getDafOptions } from "@/lib/source-data";
+import { getCategories, getDafOptions, getSegmentCount } from "@/lib/source-data";
 import type { SourceType, PickerState } from "@/lib/types";
 import type { SourceItem } from "@/lib/source-data";
 
@@ -147,22 +147,27 @@ export function InlinePicker({
             </select>
           </div>
 
-          {/* Mishnah (mishnayos only) */}
-          {sourceType === "mishnayos" && perek && (
+          {/* Mishnah / Verse selector (mishnayos & chumash) */}
+          {sourceType === "mishnayos" && perek && selectedItem && (
             <div className="w-[65px]">
               <label className="block text-[10px] font-semibold text-[var(--muted)] uppercase tracking-wider mb-1">
                 Mishnah
               </label>
-              <input
-                type="number"
-                min={1}
-                max={30}
+              <select
                 value={mishnah}
                 onChange={(e) => handleMishnahChange(e.target.value)}
-                placeholder="All"
-                className="select-field text-[13px] py-2 tabular-nums"
-                style={{ paddingRight: 8 }}
-              />
+                className="select-field text-[13px] py-2"
+              >
+                <option value="">All</option>
+                {Array.from(
+                  { length: getSegmentCount(selectedItem, parseInt(perek)) || 30 },
+                  (_, i) => (
+                    <option key={i + 1} value={String(i + 1)}>
+                      {i + 1}
+                    </option>
+                  )
+                )}
+              </select>
             </div>
           )}
 

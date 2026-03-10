@@ -1,52 +1,82 @@
-import Anthropic from "@anthropic-ai/sdk";
+import { ai, GEMINI_TEXT_MODEL } from "@/lib/gemini";
 import { getCategories, getDafOptions } from "@/lib/source-data";
+import { getCalendarData } from "@/lib/jewish-calendar";
 import { fetchTexts } from "@/lib/sefaria";
 import type { StormTweet, SourceType } from "@/lib/types";
 
-const client = new Anthropic();
+export const runtime = "edge";
 
 const allSourceTypes: SourceType[] = ["mishnayos", "gemara", "chumash"];
 
-function pickRandomItems(count: number) {
-  const picks: {
-    slug: string;
-    ref: string;
-    sourceType: SourceType;
-    displayName: string;
-  }[] = [];
+function pickRandomItem(): {
+  slug: string;
+  ref: string;
+  sourceType: SourceType;
+  displayName: string;
+  label?: string;
+} {
+  const sourceType =
+    allSourceTypes[Math.floor(Math.random() * allSourceTypes.length)];
+  const categories = getCategories(sourceType);
+  const category =
+    categories[Math.floor(Math.random() * categories.length)];
+  const item =
+    category.items[Math.floor(Math.random() * category.items.length)];
 
-  for (let i = 0; i < count; i++) {
-    const sourceType =
-      allSourceTypes[Math.floor(Math.random() * allSourceTypes.length)];
-    const categories = getCategories(sourceType);
-    const category =
-      categories[Math.floor(Math.random() * categories.length)];
-    const item =
-      category.items[Math.floor(Math.random() * category.items.length)];
+  let ref: string;
+  let displayName: string;
 
-    let ref: string;
-    let displayName: string;
-
-    if (item.useDaf) {
-      const dafOptions = getDafOptions(Math.min(item.chapters, 30));
-      const daf = dafOptions[Math.floor(Math.random() * dafOptions.length)];
-      ref = daf.value;
-      displayName = `${item.name} ${daf.label}`;
-    } else {
-      const chapter = Math.floor(Math.random() * item.chapters) + 1;
-      ref = String(chapter);
-      displayName = `${item.name} ${chapter}`;
-    }
-
-    picks.push({ slug: item.slug, ref, sourceType, displayName });
+  if (item.useDaf) {
+    const dafOptions = getDafOptions(Math.min(item.chapters, 30));
+    const daf = dafOptions[Math.floor(Math.random() * dafOptions.length)];
+    ref = daf.value;
+    displayName = `${item.name} ${daf.label}`;
+  } else {
+    const chapter = Math.floor(Math.random() * item.chapters) + 1;
+    ref = String(chapter);
+    displayName = `${item.name} ${chapter}`;
   }
 
-  return picks;
+  return { slug: item.slug, ref, sourceType, displayName };
 }
 
 export async function POST() {
   try {
-    const picks = pickRandomItems(4);
+    // Get contextual calendar data
+    const calendar = await getCalendarData();
+
+    // Build picks: contextual first, then random
+    const picks: {
+      slug: string;
+      ref: string;
+      sourceType: SourceType;
+      displayName: string;
+      label?: string;
+      context?: string;
+    }[] = [];
+
+    // 1. Weekly Parsha (always include)
+    if (calendar.parsha) {
+      picks.push(calendar.parsha);
+    }
+
+    // 2. Daf Yomi or Daily Mishnah (alternate)
+    if (calendar.dafYomi && Math.random() > 0.5) {
+      picks.push(calendar.dafYomi);
+    } else if (calendar.dailyMishnah) {
+      picks.push(calendar.dailyMishnah);
+    } else if (calendar.dafYomi) {
+      picks.push(calendar.dafYomi);
+    }
+
+    // 3. Fill remaining with random picks (target 5 total)
+    while (picks.length < 5) {
+      const pick = pickRandomItem();
+      // Avoid duplicating slugs
+      if (!picks.some((p) => p.slug === pick.slug && p.ref === pick.ref)) {
+        picks.push(pick);
+      }
+    }
 
     // Fetch texts concurrently
     const textResults = await Promise.allSettled(
@@ -78,25 +108,39 @@ export async function POST() {
           .slice(0, 3)
           .map((t) => `Hebrew: ${t.hebrew}\nEnglish: ${t.english}`)
           .join("\n");
-        return `--- ${pick.displayName} (${pick.sourceType}) ---\n${textContent}`;
+        const labelTag = pick.label ? ` [${pick.label}]` : "";
+        const contextNote = pick.context
+          ? `\nContext: ${pick.context.slice(0, 200)}`
+          : "";
+        return `--- ${pick.displayName} (${pick.sourceType})${labelTag} ---${contextNote}\n${textContent}`;
       })
       .join("\n\n");
 
-    const prompt = `You are an engaging Torah educator for a frum audience. Create a discovery feed mixing insights from different Torah sources.
+    const prompt = `You're curating a "For You" Torah discovery feed. Think of yourself as a brilliant Torah educator who also happens to write viral Twitter threads. Your audience is frum, smart, and busy — they're scrolling. You need to STOP them.
 
-Use standard Orthodox terminology: "Hashem" not "God", "tefillah" not "prayer", "brachos" not "blessings", "halacha", "mitzva/mitzvos", "Chazal", etc.
+Use standard Orthodox terminology: "Hashem" not "God", "tefillah" not "prayer", "brachos" not "blessings", "halacha", "mitzva/mitzvos", "Chazal", etc. No hashtags. No emojis.
 
-CRITICAL OUTPUT FORMAT: Output one JSON object per line. No other text. No markdown code fences. Every line must be independently parseable as JSON:
-{"ref":"Source Name","n":1,"text":"1/ Engaging tweet..."}
-{"ref":"Source Name","n":2,"text":"2/ Another tweet...","img":"detailed educational image prompt"}
-{"ref":"Different Source","n":1,"text":"1/ New topic hook..."}
+YOUR JOB: Don't just summarize the text. Pull in commentary — Rashi, Ramban, Sforno, Bartenura, Tosafos, Midrash — and share surprising insights, lesser-known facts, fascinating machlokes, or connections between different parts of Torah that will make people go "I never knew that."
+
+For [This Week's Parsha]: Don't just say "This Shabbos we read about X." Instead, find a surprising angle — a Rashi that reveals something unexpected, a Ramban that disagrees, a Midrash that changes the whole story. Make it feel like insider knowledge.
+
+CRITICAL OUTPUT FORMAT: One JSON object per line. No other text. No markdown:
+{"ref":"Source Name","n":1,"text":"1/ tweet text","label":"This Week's Parsha"}
+{"ref":"Source Name","n":2,"text":"2/ tweet text","img":"image prompt"}
+
+LENGTH VARIATION — THIS IS CRITICAL:
+- At least 2 tweets should be SHORT: one sentence, under 60 characters. Like "This Rashi will blow your mind." or "Wait for it." or "Most people miss this."
+- Some tweets: 2-3 sentences, 100-200 chars. The meat.
+- At most 1-2 tweets: up to 280 chars, the deep dive with a line break for emphasis.
+- The feed should feel SNAPPY. If every tweet is the same length, you've failed.
 
 Rules:
-- For each source, write 2-3 punchy tweets (≤280 chars each)
-- Use thread numbering that resets per source (1/, 2/, etc.)
-- "ref" field must match the source name EXACTLY as given above
-- Include exactly 2 tweets total with "img" field across the entire feed (creative visuals, diagrams, illustrations)
-- Make each tweet engaging and teach something interesting
+- For parsha: 3-4 tweets. For others: 2-3 tweets.
+- Thread numbering resets per source (1/, 2/, etc.)
+- "ref" must match the source name EXACTLY as given
+- Include "label" field if the source has a label tag
+- Include exactly 2 "img" fields total — detailed prompts for clean educational illustrations on white background with labels
+- Omit "img" for non-image tweets
 
 Sources:
 ${textList}`;
@@ -106,65 +150,72 @@ ${textList}`;
     const readable = new ReadableStream({
       async start(controller) {
         try {
-          const stream = client.messages.stream({
-            model: "claude-sonnet-4-20250514",
-            max_tokens: 4000,
-            messages: [{ role: "user", content: prompt }],
+          const response = await ai.models.generateContentStream({
+            model: GEMINI_TEXT_MODEL,
+            contents: [{ role: "user", parts: [{ text: prompt }] }],
+            config: {
+              thinkingConfig: { thinkingBudget: 2048 },
+              maxOutputTokens: 8000,
+            },
           });
 
           let buffer = "";
           let tweetIndex = 0;
 
-          for await (const event of stream) {
-            if (
-              event.type === "content_block_delta" &&
-              event.delta.type === "text_delta"
-            ) {
-              buffer += event.delta.text;
+          for await (const chunk of response) {
+            const parts = chunk.candidates?.[0]?.content?.parts;
+            if (!parts) continue;
 
-              const lines = buffer.split("\n");
-              buffer = lines.pop()!;
+            for (const part of parts) {
+              // Skip thinking parts
+              if ((part as Record<string, unknown>).thought) continue;
+              if (!part.text) continue;
+              buffer += part.text;
+            }
 
-              for (const line of lines) {
-                const trimmed = line.trim();
-                if (
-                  !trimmed ||
-                  trimmed === "```" ||
-                  trimmed === "```json" ||
-                  trimmed === "```jsonl"
-                )
-                  continue;
+            // Extract complete lines
+            const lines = buffer.split("\n");
+            buffer = lines.pop()!;
 
-                try {
-                  const parsed = JSON.parse(trimmed);
-                  if (!parsed.text) continue;
+            for (const line of lines) {
+              const trimmed = line.trim();
+              if (
+                !trimmed ||
+                trimmed === "```" ||
+                trimmed === "```json" ||
+                trimmed === "```jsonl"
+              )
+                continue;
 
-                  // Match back to pick for slug/sourceRef
-                  const matchingPick = validTexts.find(
-                    (vt) => vt.pick.displayName === parsed.ref
-                  )?.pick;
+              try {
+                const parsed = JSON.parse(trimmed);
+                if (!parsed.text) continue;
 
-                  const tweet: StormTweet = {
-                    id: `discover-${tweetIndex}`,
-                    ref: parsed.ref || "Torah",
-                    slug: matchingPick?.slug,
-                    sourceRef: matchingPick?.ref,
-                    tweetNumber: parsed.n || 1,
-                    totalTweets: 0,
-                    text: parsed.text,
-                    needsImage: !!parsed.img,
-                    imagePrompt: parsed.img || undefined,
-                  };
+                const matchingPick = validTexts.find(
+                  (vt) => vt.pick.displayName === parsed.ref
+                )?.pick;
 
-                  controller.enqueue(
-                    encoder.encode(
-                      `data: ${JSON.stringify(tweet)}\n\n`
-                    )
-                  );
-                  tweetIndex++;
-                } catch {
-                  // Skip malformed lines
-                }
+                const tweet: StormTweet = {
+                  id: `discover-${tweetIndex}`,
+                  ref: parsed.ref || "Torah",
+                  slug: matchingPick?.slug,
+                  sourceRef: matchingPick?.ref,
+                  tweetNumber: parsed.n || 1,
+                  totalTweets: 0,
+                  text: parsed.text,
+                  needsImage: !!parsed.img,
+                  imagePrompt: parsed.img || undefined,
+                  label: parsed.label || matchingPick?.label,
+                };
+
+                controller.enqueue(
+                  encoder.encode(
+                    `data: ${JSON.stringify(tweet)}\n\n`
+                  )
+                );
+                tweetIndex++;
+              } catch {
+                // Skip malformed lines
               }
             }
           }
@@ -189,6 +240,7 @@ ${textList}`;
                   text: parsed.text,
                   needsImage: !!parsed.img,
                   imagePrompt: parsed.img || undefined,
+                  label: parsed.label || matchingPick?.label,
                 };
 
                 controller.enqueue(

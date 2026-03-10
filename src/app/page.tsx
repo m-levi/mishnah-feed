@@ -13,7 +13,7 @@ import {
 import { InlinePicker } from "@/components/mishnah-selector";
 import { StormCard } from "@/components/storm-card";
 import { TweetSkeleton } from "@/components/tweet-skeleton";
-import { LearnMoreModal } from "@/components/learn-more-modal";
+import { CommentaryView } from "@/components/commentary-view";
 import { BookmarksSheet } from "@/components/bookmarks-sheet";
 import { BottomNav, type AppView } from "@/components/bottom-nav";
 import { MyLearningView } from "@/components/my-learning-view";
@@ -149,7 +149,7 @@ async function readStream(
 
 // ── Main component ─────────────────────────────────────────
 export default function HomePage() {
-  const { user, checkUsageLimit, incrementUsage, usageRemaining } = useAuth();
+  const { user, checkUsageLimit, incrementUsage } = useAuth();
 
   const [appView, setAppView] = useState<AppView>("feed");
   const [activeTab, setActiveTab] = useState<TabKey>("foryou");
@@ -888,22 +888,7 @@ export default function HomePage() {
             />
           )}
 
-          {/* Usage bar for anonymous users */}
-          {!user && activeTab !== "foryou" && usageRemaining <= 3 && usageRemaining > 0 && (
-            <div className="bg-[var(--accent-light)] border-b border-[var(--accent-muted)] px-4 py-2">
-              <div className="max-w-2xl mx-auto flex items-center justify-between">
-                <p className="text-xs text-[var(--accent)]">
-                  {usageRemaining} free generation{usageRemaining !== 1 ? "s" : ""} left today
-                </p>
-                <button
-                  onClick={() => setShowAuth(true)}
-                  className="text-xs font-semibold text-[var(--accent)] hover:underline cursor-pointer"
-                >
-                  Sign in for unlimited
-                </button>
-              </div>
-            </div>
-          )}
+          {/* Usage bar removed — no rate limiting */}
 
           {/* Feed info bar */}
           {showFeed && currentSelection && (
@@ -1088,12 +1073,14 @@ export default function HomePage() {
       {/* Bottom navigation (mobile) */}
       <BottomNav activeView={appView} onNavigate={setAppView} />
 
-      {/* Learn more modal */}
+      {/* Commentary page */}
       {selectedTweet && (
-        <LearnMoreModal
-          tweet={selectedTweet}
-          onClose={() => setSelectedTweet(null)}
-        />
+        <div className="fixed inset-0 z-50 bg-[var(--bg)]">
+          <CommentaryView
+            tweet={selectedTweet}
+            onBack={() => setSelectedTweet(null)}
+          />
+        </div>
       )}
 
       {/* Bookmarks sheet */}

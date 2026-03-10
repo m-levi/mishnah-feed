@@ -1,7 +1,7 @@
-import { GoogleGenAI } from "@google/genai";
+import { ai, GEMINI_IMAGE_MODEL } from "@/lib/gemini";
 import { NextResponse } from "next/server";
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
+export const runtime = "edge";
 
 export async function POST(req: Request) {
   try {
@@ -15,7 +15,7 @@ export async function POST(req: Request) {
     }
 
     const response = await ai.models.generateContent({
-      model: "gemini-3.1-flash-image-preview",
+      model: GEMINI_IMAGE_MODEL,
       contents: [
         {
           role: "user",

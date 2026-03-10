@@ -1,8 +1,8 @@
-import Anthropic from "@anthropic-ai/sdk";
+import { ai, GEMINI_TEXT_MODEL } from "@/lib/gemini";
 import { fetchTexts } from "@/lib/sefaria";
 import type { StormTweet, SourceType } from "@/lib/types";
 
-const client = new Anthropic();
+export const runtime = "edge";
 
 const sourceTypeContext: Record<SourceType, string> = {
   mishnayos: `You are an engaging Torah educator explaining a Mishnah to a frum audience. Use standard Orthodox terminology:
@@ -63,26 +63,37 @@ export async function POST(req: Request) {
 
     const prompt = `${context}
 
-Write a tweet storm (Twitter thread) breaking down the following text. Make it engaging, clear, and punchy — like a viral thread that makes people want to learn more Torah.
+Break down this Torah text as a tweet storm. You're the best Torah educator on Twitter — your threads go viral because you make ancient wisdom feel alive and urgent.
 
-CRITICAL OUTPUT FORMAT: Output one JSON object per line. No other text before, after, or between lines. No markdown code fences. Every line must be independently parseable as JSON:
-{"n":1,"text":"1/ The hook tweet..."}
-{"n":2,"text":"2/ Next insight...","img":"detailed educational image prompt: clean diagram with labels on white background"}
-{"n":3,"text":"3/ The takeaway..."}
+Don't just explain. Bring in meforshim — Rashi, Ramban, Tosafos, Bartenura, Rambam, Midrash — and share the surprising stuff. The things people don't know. The "wait, THAT'S what it means?" moments.
+
+CRITICAL OUTPUT FORMAT: One JSON object per line. No other text. No markdown:
+{"n":1,"text":"1/ tweet text"}
+{"n":2,"text":"2/ tweet text","img":"image prompt"}
+
+LENGTH VARIATION — NON-NEGOTIABLE:
+- At least 2 tweets MUST be one short sentence, under 60 chars. Examples:
+  "This changes everything." / "But here's the twist." / "Read that again." / "Nobody talks about this part."
+- Some tweets: 2 sentences, ~120 chars. Clear and punchy.
+- Some tweets: up to 280 chars with line breaks. The deep dives.
+- If all your tweets are the same length, START OVER.
+
+PACING:
+1/ Hook — short, provocative, makes you want to keep reading
+2/ Setup — a bit longer, gives context
+3/ Tension — short again. "But wait."
+4/ Payoff — the longest tweet. The insight. The Rashi. The Midrash.
+5/ Reaction — short. Let it land.
+...continue this rhythm.
 
 Rules:
-- Each tweet ≤ 280 characters
-- Use thread numbering (1/, 2/, etc.)
-- Start with an attention-grabbing hook
-- Break down key concepts clearly
-- Add context where helpful (who are the Tanna'im/Amora'im, what's the background)
-- End with a powerful takeaway or mussar insight
-- No full Hebrew text — English breakdown quoting key Hebrew terms
-- Include EXACTLY 2 tweets with "img" field containing detailed image prompts for clean educational illustrations with labels on white background
-- Omit "img" field entirely for non-image tweets
-- Aim for 6-10 tweets total
+- 6-10 tweets total
+- EXACTLY 2 tweets with "img" field — detailed prompts for clean diagrams/illustrations on white background with labels
+- Omit "img" for all other tweets
+- No hashtags. No emojis.
+- Thread numbering: 1/, 2/, etc.
 
-Here is the text:
+Text:
 
 ${textList}`;
 
@@ -91,61 +102,66 @@ ${textList}`;
     const readable = new ReadableStream({
       async start(controller) {
         try {
-          const stream = client.messages.stream({
-            model: "claude-sonnet-4-20250514",
-            max_tokens: 8000,
-            messages: [{ role: "user", content: prompt }],
+          const response = await ai.models.generateContentStream({
+            model: GEMINI_TEXT_MODEL,
+            contents: [{ role: "user", parts: [{ text: prompt }] }],
+            config: {
+              thinkingConfig: { thinkingBudget: 2048 },
+              maxOutputTokens: 8000,
+            },
           });
 
           let buffer = "";
           let tweetIndex = 0;
 
-          for await (const event of stream) {
-            if (
-              event.type === "content_block_delta" &&
-              event.delta.type === "text_delta"
-            ) {
-              buffer += event.delta.text;
+          for await (const chunk of response) {
+            const parts = chunk.candidates?.[0]?.content?.parts;
+            if (!parts) continue;
 
-              // Extract complete lines
-              const lines = buffer.split("\n");
-              buffer = lines.pop()!;
+            for (const part of parts) {
+              if ((part as Record<string, unknown>).thought) continue;
+              if (!part.text) continue;
+              buffer += part.text;
+            }
 
-              for (const line of lines) {
-                const trimmed = line.trim();
-                if (
-                  !trimmed ||
-                  trimmed === "```" ||
-                  trimmed === "```json" ||
-                  trimmed === "```jsonl"
-                )
-                  continue;
+            // Extract complete lines
+            const lines = buffer.split("\n");
+            buffer = lines.pop()!;
 
-                try {
-                  const parsed = JSON.parse(trimmed);
-                  if (!parsed.text) continue;
+            for (const line of lines) {
+              const trimmed = line.trim();
+              if (
+                !trimmed ||
+                trimmed === "```" ||
+                trimmed === "```json" ||
+                trimmed === "```jsonl"
+              )
+                continue;
 
-                  const tweet: StormTweet = {
-                    id: `storm-${slug}-${tweetIndex}`,
-                    ref: displayRef,
-                    slug,
-                    sourceRef: ref,
-                    tweetNumber: parsed.n || tweetIndex + 1,
-                    totalTweets: 0,
-                    text: parsed.text,
-                    needsImage: !!parsed.img,
-                    imagePrompt: parsed.img || undefined,
-                  };
+              try {
+                const parsed = JSON.parse(trimmed);
+                if (!parsed.text) continue;
 
-                  controller.enqueue(
-                    encoder.encode(
-                      `data: ${JSON.stringify(tweet)}\n\n`
-                    )
-                  );
-                  tweetIndex++;
-                } catch {
-                  // Skip malformed lines
-                }
+                const tweet: StormTweet = {
+                  id: `storm-${slug}-${tweetIndex}`,
+                  ref: displayRef,
+                  slug,
+                  sourceRef: ref,
+                  tweetNumber: parsed.n || tweetIndex + 1,
+                  totalTweets: 0,
+                  text: parsed.text,
+                  needsImage: !!parsed.img,
+                  imagePrompt: parsed.img || undefined,
+                };
+
+                controller.enqueue(
+                  encoder.encode(
+                    `data: ${JSON.stringify(tweet)}\n\n`
+                  )
+                );
+                tweetIndex++;
+              } catch {
+                // Skip malformed lines
               }
             }
           }
@@ -179,7 +195,6 @@ ${textList}`;
             }
           }
 
-          // Send done signal
           controller.enqueue(
             encoder.encode(
               `data: ${JSON.stringify({ done: true, total: tweetIndex })}\n\n`
