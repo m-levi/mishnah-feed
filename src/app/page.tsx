@@ -57,8 +57,8 @@ interface LastStudied {
   timestamp: number;
 }
 
-const LS_PICKER_KEY = "mishnah-feed-pickers";
-const LS_LAST_STUDIED_KEY = "mishnah-feed-last-studied";
+const LS_PICKER_KEY = "dvar-pickers";
+const LS_LAST_STUDIED_KEY = "dvar-last-studied";
 
 function loadPickerStates(): Record<string, PickerState> {
   try {
@@ -789,7 +789,7 @@ export default function HomePage() {
                 className="text-lg font-semibold text-[var(--text)]"
                 style={{ fontFamily: "var(--font-display)" }}
               >
-                MishnahFeed
+                Dvar
               </h1>
 
               <div className="flex gap-0.5">

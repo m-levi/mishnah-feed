@@ -11,7 +11,7 @@ interface StormCardProps {
 
 function getFavorites(): string[] {
   try {
-    const saved = localStorage.getItem("mishnah-feed-favorites");
+    const saved = localStorage.getItem("dvar-favorites");
     return saved ? JSON.parse(saved) : [];
   } catch {
     return [];
@@ -20,7 +20,7 @@ function getFavorites(): string[] {
 
 function setFavorites(ids: string[]) {
   try {
-    localStorage.setItem("mishnah-feed-favorites", JSON.stringify(ids));
+    localStorage.setItem("dvar-favorites", JSON.stringify(ids));
   } catch {}
 }
 
@@ -36,7 +36,7 @@ export function StormCard({ tweet, onTap }: StormCardProps) {
   useEffect(() => {
     setLiked(getFavorites().includes(tweet.id));
     try {
-      const saved = localStorage.getItem("mishnah-feed-saved");
+      const saved = localStorage.getItem("dvar-saved");
       if (saved) {
         const list: StormTweet[] = JSON.parse(saved);
         setBookmarked(list.some((t) => t.id === tweet.id));
@@ -83,7 +83,7 @@ export function StormCard({ tweet, onTap }: StormCardProps) {
     const newBookmarked = !bookmarked;
     setBookmarked(newBookmarked);
     try {
-      const saved = localStorage.getItem("mishnah-feed-saved");
+      const saved = localStorage.getItem("dvar-saved");
       const list: StormTweet[] = saved ? JSON.parse(saved) : [];
       if (newBookmarked) {
         if (!list.some((t) => t.id === tweet.id)) {
@@ -93,7 +93,7 @@ export function StormCard({ tweet, onTap }: StormCardProps) {
         const idx = list.findIndex((t) => t.id === tweet.id);
         if (idx >= 0) list.splice(idx, 1);
       }
-      localStorage.setItem("mishnah-feed-saved", JSON.stringify(list));
+      localStorage.setItem("dvar-saved", JSON.stringify(list));
     } catch {}
   };
 

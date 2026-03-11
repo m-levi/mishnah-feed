@@ -20,7 +20,7 @@ export function SharedStormView({ ref_, tweets, createdAt }: Props) {
               className="text-lg font-semibold text-[var(--text)]"
               style={{ fontFamily: "var(--font-display)" }}
             >
-              MishnahFeed
+              Dvar
             </h1>
             <p className="text-xs text-[var(--muted)]">
               Shared on {new Date(createdAt).toLocaleDateString()}

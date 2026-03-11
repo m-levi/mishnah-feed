@@ -16,7 +16,7 @@ const dmSans = DM_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "MishnahFeed",
+  title: "Dvar",
   description:
     "Torah learning, reimagined — bite-sized insights from Mishnah, Gemara, and Tanakh",
 };
