@@ -148,6 +148,14 @@ body {
   animation: pickerSlideIn 0.25s ease-out;
 }
 
+/* Desktop content column border (Twitter-style) */
+@media (min-width: 640px) {
+  .sm\:max-w-\[600px\] {
+    border-right: 1px solid var(--border);
+    min-height: 100vh;
+  }
+}
+
 /* Print */
 @media print {
   body { background: white; }

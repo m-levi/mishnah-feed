@@ -35,13 +35,14 @@ export async function POST(req: Request) {
 
 "${text}"
 
-Here is related commentary from classic meforshim:
+Here is ACTUAL related commentary from classic meforshim (from Sefaria):
 
 ${commentaryContext}
 
 Create a tweet storm (3-6 tweets, max 280 chars each) breaking down the key commentary insights. Each tweet should:
-- Focus on a different commentator's perspective
+- Focus on a different commentator's perspective — ONLY use what they actually say above
 - Start with the commentator's name (e.g., "Rashi explains...", "The Bartenura notes...")
+- Accurately represent what the commentator says — do NOT fabricate or embellish
 - Be engaging and accessible
 - Use thread numbering (1/, 2/, etc.)
 
@@ -60,9 +61,11 @@ Respond with ONLY valid JSON (no markdown, no code fences):
 
 "${text}"
 
-Create a tweet storm (3-5 tweets, max 280 chars each) providing deeper commentary insights. Each tweet should:
-- Focus on a different commentator (Rashi, Ramban, Bartenura, Tosafot Yom Tov, Rambam, Sforno, etc.)
-- Start with the commentator's name
+No additional commentary was found for this specific text. Create a tweet storm (3-5 tweets, max 280 chars each) providing a deeper analysis of the text itself. Each tweet should:
+- Analyze the plain meaning (pshat) of what the text actually says
+- Draw out implications, patterns, or important halachic/hashkafic points from the text
+- Do NOT fabricate or attribute statements to specific commentators — instead, offer your own analysis
+- Label insights as "deeper look", "takeaway", etc. — not as specific meforshim
 - Be engaging and accessible
 - Use thread numbering (1/, 2/, etc.)
 
@@ -73,8 +76,8 @@ End with a takeaway tweet.
 Respond with ONLY valid JSON (no markdown, no code fences):
 {
   "tweets": [
-    { "commentator": "Rashi", "text": "1/ Rashi explains..." },
-    { "commentator": "Bartenura", "text": "2/ The Bartenura..." }
+    { "commentator": "Deeper Look", "text": "1/ The text here is teaching us..." },
+    { "commentator": "Takeaway", "text": "2/ What stands out is..." }
   ]
 }`;
 

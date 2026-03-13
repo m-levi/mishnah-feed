@@ -9,6 +9,10 @@ import {
   BookOpen,
   ChevronRight,
   User,
+  Home,
+  Hash,
+  ScrollText,
+  BookText,
 } from "lucide-react";
 import { InlinePicker } from "@/components/mishnah-selector";
 import { StormCard } from "@/components/storm-card";
@@ -190,6 +194,7 @@ export default function HomePage() {
 
   const touchStartRef = useRef<{ x: number; y: number } | null>(null);
   const touchEndRef = useRef<number | null>(null);
+  const touchEndYRef = useRef<number | null>(null);
 
   const abortActiveStream = useCallback(() => {
     if (activeStreamRef.current) {
@@ -212,9 +217,24 @@ export default function HomePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Save progress to Supabase when a storm finishes loading
+  // Save progress to Supabase and localStorage when a storm finishes loading
   const saveProgress = useCallback(
     async (slug: string, ref: string, sourceType: SourceType, displayName: string) => {
+      // Always save to localStorage for anonymous tracking
+      try {
+        const key = "mishnah-feed-local-progress";
+        const saved = localStorage.getItem(key);
+        const records: { slug: string; ref: string; sourceType: SourceType; displayName: string; timestamp: number }[] = saved ? JSON.parse(saved) : [];
+        // Avoid duplicates
+        if (!records.some(r => r.slug === slug && r.ref === ref)) {
+          records.unshift({ slug, ref, sourceType, displayName, timestamp: Date.now() });
+          // Keep last 100 entries
+          if (records.length > 100) records.length = 100;
+          localStorage.setItem(key, JSON.stringify(records));
+        }
+      } catch {}
+
+      // Also save to Supabase if logged in
       if (!user) return;
       try {
         await supabase.from("learning_progress").upsert(
@@ -679,23 +699,30 @@ export default function HomePage() {
     return () => observer.disconnect();
   }, [isLoading, loadingMore, loadNextSection]);
 
-  // Swipe handlers
+  // Swipe handlers — only swipe tabs when horizontal movement clearly dominates vertical
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
     touchStartRef.current = {
       x: e.targetTouches[0].clientX,
       y: e.targetTouches[0].clientY,
     };
     touchEndRef.current = null;
+    touchEndYRef.current = null;
   }, []);
 
   const handleTouchMove = useCallback((e: React.TouchEvent) => {
     touchEndRef.current = e.targetTouches[0].clientX;
+    touchEndYRef.current = e.targetTouches[0].clientY;
   }, []);
 
   const handleTouchEnd = useCallback(() => {
-    if (!touchStartRef.current || touchEndRef.current === null) return;
+    if (!touchStartRef.current || touchEndRef.current === null || touchEndYRef.current === null) return;
     const distanceX = touchStartRef.current.x - touchEndRef.current;
-    if (Math.abs(distanceX) < 60) return;
+    const distanceY = touchStartRef.current.y - (touchEndYRef.current ?? 0);
+
+    // Only trigger horizontal swipe if:
+    // 1. Horizontal distance is at least 80px (more forgiving threshold)
+    // 2. Horizontal movement is at least 2x the vertical movement (clearly intentional)
+    if (Math.abs(distanceX) < 80 || Math.abs(distanceX) < Math.abs(distanceY) * 2) return;
 
     const tabKeys = tabs.map((t) => t.key);
     const currentIndex = tabKeys.indexOf(activeTab);
@@ -708,6 +735,7 @@ export default function HomePage() {
 
     touchStartRef.current = null;
     touchEndRef.current = null;
+    touchEndYRef.current = null;
   }, [activeTab, handleTabChange]);
 
   const handleShare = async () => {
@@ -777,14 +805,97 @@ export default function HomePage() {
   ).length;
   const activeTabIndex = tabs.findIndex((t) => t.key === activeTab);
 
+  const sidebarNavItems: { key: TabKey | "learning" | "bookmarks"; label: string; icon: typeof Home }[] = [
+    { key: "foryou", label: "For You", icon: Home },
+    { key: "mishnayos", label: "Mishnayos", icon: ScrollText },
+    { key: "gemara", label: "Gemara", icon: BookText },
+    { key: "chumash", label: "Tanakh", icon: Hash },
+    { key: "learning", label: "My Learning", icon: BookOpen },
+    { key: "bookmarks", label: "Bookmarks", icon: Bookmark },
+  ];
+
+  const handleSidebarNav = useCallback((key: string) => {
+    if (key === "learning") {
+      setAppView("learning");
+    } else if (key === "bookmarks") {
+      setAppView("feed");
+      setShowBookmarks(true);
+    } else {
+      setAppView("feed");
+      handleTabChange(key as TabKey);
+    }
+  }, [handleTabChange]);
+
+  const activeSidebarKey = appView === "learning" ? "learning" : activeTab;
+
   return (
-    <div className="min-h-screen bg-[var(--bg)] pb-16 sm:pb-0">
+    <div className="min-h-screen bg-[var(--bg)] pb-16 sm:pb-0 sm:flex sm:justify-center">
+      {/* ─── DESKTOP SIDEBAR ─── */}
+      <aside className="hidden sm:flex sm:flex-col sm:w-[220px] lg:w-[260px] sm:fixed sm:left-[max(0px,calc(50%-450px))] sm:top-0 sm:bottom-0 sm:border-r sm:border-[var(--border)] sm:bg-[var(--card-bg)] sm:z-20 no-print">
+        {/* Logo */}
+        <div className="px-5 pt-5 pb-2">
+          <h1
+            className="text-xl font-bold text-[var(--text)]"
+            style={{ fontFamily: "var(--font-display)" }}
+          >
+            MishnahFeed
+          </h1>
+        </div>
+
+        {/* Nav items */}
+        <nav className="flex-1 px-3 py-2 space-y-0.5">
+          {sidebarNavItems.map(({ key, label, icon: Icon }) => {
+            const active = activeSidebarKey === key;
+            return (
+              <button
+                key={key}
+                onClick={() => handleSidebarNav(key)}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-full text-[15px] transition-colors cursor-pointer ${
+                  active
+                    ? "font-bold text-[var(--text)] bg-[var(--bg)]"
+                    : "font-medium text-[var(--text-secondary)] hover:bg-[var(--bg)]"
+                }`}
+              >
+                <Icon className="w-[22px] h-[22px]" strokeWidth={active ? 2.5 : 2} />
+                {label}
+              </button>
+            );
+          })}
+        </nav>
+
+        {/* User section at bottom */}
+        <div className="px-3 pb-4 mt-auto">
+          {!user ? (
+            <button
+              onClick={() => setShowAuth(true)}
+              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-full text-[15px] font-medium text-[var(--text-secondary)] hover:bg-[var(--bg)] transition-colors cursor-pointer"
+            >
+              <User className="w-[22px] h-[22px]" />
+              Sign In
+            </button>
+          ) : (
+            <button
+              onClick={() => handleSidebarNav("learning")}
+              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-full hover:bg-[var(--bg)] transition-colors cursor-pointer"
+            >
+              <div className="w-8 h-8 rounded-full bg-[var(--accent)] flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
+                {(user.email || "U")[0].toUpperCase()}
+              </div>
+              <span className="text-sm font-medium text-[var(--text)] truncate">{user.email}</span>
+            </button>
+          )}
+        </div>
+      </aside>
+
+      {/* ─── MAIN CONTENT AREA ─── */}
+      <div className="sm:ml-[220px] lg:ml-[260px] sm:max-w-[600px] w-full">
       {/* ─── FEED VIEW ─── */}
       {appView === "feed" && (
         <>
           {/* Header */}
           <div className="sticky top-0 z-10 bg-[var(--card-bg)]/95 backdrop-blur-md border-b border-[var(--border)] no-print">
-            <div className="max-w-2xl mx-auto px-4 pt-3 pb-1 flex items-center justify-between">
+            {/* Mobile header */}
+            <div className="sm:hidden px-4 pt-3 pb-1 flex items-center justify-between">
               <h1
                 className="text-lg font-semibold text-[var(--text)]"
                 style={{ fontFamily: "var(--font-display)" }}
@@ -793,14 +904,6 @@ export default function HomePage() {
               </h1>
 
               <div className="flex gap-0.5">
-                {/* Desktop: My Learning link */}
-                <button
-                  onClick={() => setAppView("learning")}
-                  className="hidden sm:flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold text-[var(--muted)] hover:bg-[var(--bg)] transition-colors cursor-pointer"
-                >
-                  <BookOpen className="w-3.5 h-3.5" />
-                  My Learning
-                </button>
                 <button
                   onClick={() => setShowBookmarks(true)}
                   className="w-8 h-8 rounded-full hover:bg-[var(--bg)] flex items-center justify-center transition-colors cursor-pointer"
@@ -825,6 +928,18 @@ export default function HomePage() {
                     {(user.email || "U")[0].toUpperCase()}
                   </button>
                 )}
+              </div>
+            </div>
+
+            {/* Desktop header - simpler, just shows active tab name + actions */}
+            <div className="hidden sm:flex px-4 pt-3 pb-2 items-center justify-between">
+              <h2
+                className="text-lg font-bold text-[var(--text)]"
+                style={{ fontFamily: "var(--font-display)" }}
+              >
+                {tabs.find(t => t.key === activeTab)?.label || "Feed"}
+              </h2>
+              <div className="flex gap-0.5">
                 {activeTab === "foryou" && (
                   <button
                     onClick={loadDiscoverFeed}
@@ -850,8 +965,8 @@ export default function HomePage() {
               </div>
             </div>
 
-            {/* Tab row */}
-            <div className="max-w-2xl mx-auto relative">
+            {/* Tab row - mobile only */}
+            <div className="sm:hidden relative">
               <div className="flex">
                 {tabs.map((tab) => (
                   <button
@@ -1051,7 +1166,7 @@ export default function HomePage() {
       {appView === "learning" && (
         <div>
           <div className="sticky top-0 z-10 bg-[var(--card-bg)]/95 backdrop-blur-md border-b border-[var(--border)] no-print">
-            <div className="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between">
+            <div className="px-4 py-3 flex items-center justify-between">
               <h1
                 className="text-lg font-semibold text-[var(--text)]"
                 style={{ fontFamily: "var(--font-display)" }}
@@ -1060,7 +1175,7 @@ export default function HomePage() {
               </h1>
               <button
                 onClick={() => setAppView("feed")}
-                className="hidden sm:flex text-sm text-[var(--accent)] font-medium hover:underline cursor-pointer"
+                className="sm:hidden text-sm text-[var(--accent)] font-medium hover:underline cursor-pointer"
               >
                 Back to Feed
               </button>
@@ -1069,6 +1184,7 @@ export default function HomePage() {
           <MyLearningView onShowAuth={() => setShowAuth(true)} />
         </div>
       )}
+      </div>{/* end main content area */}
 
       {/* Bottom navigation (mobile) */}
       <BottomNav activeView={appView} onNavigate={setAppView} />

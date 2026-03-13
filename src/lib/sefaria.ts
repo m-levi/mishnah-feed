@@ -45,45 +45,55 @@ export async function fetchCommentary(
   const cached = getCached<Commentary[]>(cacheKey);
   if (cached) return cached;
 
-  const url = `https://www.sefaria.org/api/related/${encodeURIComponent(fullRef)}`;
-
-  try {
-    const res = await fetch(url);
-    if (!res.ok) return [];
-
-    const data = await res.json();
-    const links = data.links || [];
-
-    const seen = new Set<string>();
-    const results: Commentary[] = [];
-
-    for (const link of links) {
-      if (link.category !== "Commentary") continue;
-      const name =
-        link.collectiveTitle?.en || link.index_title || "Commentary";
-      if (seen.has(name)) continue;
-      seen.add(name);
-
-      const enText =
-        typeof link.text === "string" ? stripHtml(link.text) : "";
-      const heText = typeof link.he === "string" ? link.he : "";
-      if (!enText && !heText) continue;
-
-      results.push({
-        commentator: name,
-        text: enText,
-        heText,
-        sourceRef: link.ref || "",
-      });
-
-      if (results.length >= 8) break;
-    }
-
-    setCache(cacheKey, results);
-    return results;
-  } catch {
-    return [];
+  // Try fetching commentary — first on the specific ref, then fall back to broader ref
+  const refsToTry = [fullRef];
+  // If ref has a segment (e.g., "1:3"), also try the chapter level (e.g., "1")
+  if (ref.includes(":")) {
+    refsToTry.push(`${slug}.${ref.split(":")[0]}`);
   }
+
+  const seen = new Set<string>();
+  const results: Commentary[] = [];
+
+  for (const tryRef of refsToTry) {
+    if (results.length >= 8) break;
+
+    const url = `https://www.sefaria.org/api/related/${encodeURIComponent(tryRef)}`;
+    try {
+      const res = await fetch(url);
+      if (!res.ok) continue;
+
+      const data = await res.json();
+      const links = data.links || [];
+
+      for (const link of links) {
+        if (link.category !== "Commentary") continue;
+        const name =
+          link.collectiveTitle?.en || link.index_title || "Commentary";
+        if (seen.has(name)) continue;
+        seen.add(name);
+
+        const enText =
+          typeof link.text === "string" ? stripHtml(link.text) : "";
+        const heText = typeof link.he === "string" ? link.he : "";
+        if (!enText && !heText) continue;
+
+        results.push({
+          commentator: name,
+          text: enText,
+          heText,
+          sourceRef: link.ref || "",
+        });
+
+        if (results.length >= 8) break;
+      }
+    } catch {
+      continue;
+    }
+  }
+
+  setCache(cacheKey, results);
+  return results;
 }
 
 export async function fetchTexts(

@@ -104,15 +104,15 @@ export function StormCard({ tweet, onTap }: StormCardProps) {
     >
       <div className="max-w-2xl mx-auto flex gap-3 py-3">
         {/* Avatar column + thread line */}
-        <div className="flex flex-col items-center flex-shrink-0 relative">
+        <div className="flex flex-col items-center flex-shrink-0 w-10 relative">
           {!isFirst && (
-            <div className="absolute top-0 w-0.5 h-3 bg-[var(--border)]" />
+            <div className="absolute left-1/2 -translate-x-1/2 top-0 w-0.5 h-3 bg-[var(--border)]" />
           )}
-          <div className="w-10 h-10 rounded-full bg-[var(--accent)] flex items-center justify-center text-white font-bold text-sm mt-0">
+          <div className="w-10 h-10 rounded-full bg-[var(--accent)] flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
             {tweet.ref.charAt(0).toUpperCase()}
           </div>
           {!isLast && (
-            <div className="w-0.5 flex-1 mt-1 bg-[var(--border)]" />
+            <div className="w-0.5 flex-1 mt-1 bg-[var(--border)] mx-auto" />
           )}
         </div>
 
