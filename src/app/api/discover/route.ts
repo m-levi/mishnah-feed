@@ -104,15 +104,17 @@ export async function POST() {
 
     const textList = validTexts
       .map(({ pick, texts }) => {
+        // Send up to 6 segments for richer context and accuracy
         const textContent = texts
-          .slice(0, 3)
-          .map((t) => `Hebrew: ${t.hebrew}\nEnglish: ${t.english}`)
-          .join("\n");
+          .slice(0, 6)
+          .map((t) => `[${t.ref}]\nHebrew: ${t.hebrew}\nEnglish: ${t.english}`)
+          .join("\n\n");
         const labelTag = pick.label ? ` [${pick.label}]` : "";
         const contextNote = pick.context
           ? `\nContext: ${pick.context.slice(0, 200)}`
           : "";
-        return `--- ${pick.displayName} (${pick.sourceType})${labelTag} ---${contextNote}\n${textContent}`;
+        const segmentNote = texts.length > 6 ? `\n(Showing 6 of ${texts.length} segments)` : "";
+        return `--- ${pick.displayName} (${pick.sourceType})${labelTag} ---${contextNote}${segmentNote}\n${textContent}`;
       })
       .join("\n\n");
 
@@ -120,16 +122,21 @@ export async function POST() {
 
 Use standard Orthodox terminology: "Hashem" not "God", "tefillah" not "prayer", "brachos" not "blessings", "halacha", "mitzva/mitzvos", "Chazal", etc. No hashtags. No emojis.
 
-YOUR JOB: Don't just summarize the text. Pull in commentary — Rashi, Ramban, Sforno, Bartenura, Tosafos, Midrash — and share surprising insights, lesser-known facts, fascinating machlokes, or connections between different parts of Torah that will make people go "I never knew that."
+ACCURACY IS PARAMOUNT — NON-NEGOTIABLE:
+- ONLY teach and explain what is ACTUALLY in the source texts provided below. Do NOT fabricate or invent teachings, stories, or commentary.
+- If you reference a commentator (Rashi, Ramban, Bartenura, Tosafos, etc.), it MUST be something they actually say on this specific text. If you aren't certain, do NOT name them.
+- You may explain the plain meaning (pshat), draw out implications, and highlight surprising details — but always grounded in the actual source text.
+- It's better to deeply explain what the text DOES say than to fabricate what it doesn't.
+- Use both the Hebrew and English provided to ensure accuracy.
 
-For [This Week's Parsha]: Don't just say "This Shabbos we read about X." Instead, find a surprising angle — a Rashi that reveals something unexpected, a Ramban that disagrees, a Midrash that changes the whole story. Make it feel like insider knowledge.
+YOUR JOB: Make the actual content of these texts come alive. Find the genuine "I never knew that" moments that are really there in the text. For [This Week's Parsha], find a genuinely surprising angle from what the text actually says.
 
 CRITICAL OUTPUT FORMAT: One JSON object per line. No other text. No markdown:
 {"ref":"Source Name","n":1,"text":"1/ tweet text","label":"This Week's Parsha"}
 {"ref":"Source Name","n":2,"text":"2/ tweet text","img":"image prompt"}
 
 LENGTH VARIATION — THIS IS CRITICAL:
-- At least 2 tweets should be SHORT: one sentence, under 60 characters. Like "This Rashi will blow your mind." or "Wait for it." or "Most people miss this."
+- At least 2 tweets should be SHORT: one sentence, under 60 characters. Like "Read that again." or "Wait for it." or "Most people miss this."
 - Some tweets: 2-3 sentences, 100-200 chars. The meat.
 - At most 1-2 tweets: up to 280 chars, the deep dive with a line break for emphasis.
 - The feed should feel SNAPPY. If every tweet is the same length, you've failed.
@@ -142,7 +149,7 @@ Rules:
 - Include exactly 2 "img" fields total — detailed prompts for clean educational illustrations on white background with labels
 - Omit "img" for non-image tweets
 
-Sources:
+Source texts (base ALL your content on these):
 ${textList}`;
 
     const encoder = new TextEncoder();

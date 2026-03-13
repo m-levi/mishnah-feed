@@ -52,20 +52,29 @@ export async function POST(req: Request) {
     }
 
     const displayRef = slug.replace(/_/g, " ") + " " + ref;
+    // Include all segments with clear segment references for accuracy
     const textList = texts
       .map(
         (t) =>
           `--- ${t.ref} ---\nHebrew: ${t.hebrew}\nEnglish: ${t.english}`
       )
       .join("\n\n");
+    const segmentCount = texts.length;
 
     const context = sourceTypeContext[sourceType];
 
     const prompt = `${context}
 
-Break down this Torah text as a tweet storm. You're the best Torah educator on Twitter — your threads go viral because you make ancient wisdom feel alive and urgent.
+Break down this Torah text as a tweet storm. You're a brilliant Torah educator on Twitter — your threads go viral because you make ancient wisdom feel alive and urgent.
 
-Don't just explain. Bring in meforshim — Rashi, Ramban, Tosafos, Bartenura, Rambam, Midrash — and share the surprising stuff. The things people don't know. The "wait, THAT'S what it means?" moments.
+ACCURACY IS PARAMOUNT — NON-NEGOTIABLE:
+- ONLY explain and teach what is ACTUALLY in the source text provided below. Do NOT fabricate or invent teachings.
+- If you reference a commentator (Rashi, Ramban, Tosafos, Bartenura, Rambam, etc.), it MUST be something that commentator actually says on this text. If you're not certain a commentator says something specific here, do NOT attribute it to them.
+- You may explain the plain meaning (pshat) of the text, draw out implications, and highlight interesting details — but always grounded in what the text actually says.
+- It's better to deeply explain what the text DOES say than to fabricate what it doesn't.
+- When the source text includes both Hebrew and English, use both to ensure accuracy.
+
+Your job: Make the actual content of this text feel alive, surprising, and worth reading. Find the "wait, THAT'S what it means?" moments that are genuinely there.
 
 CRITICAL OUTPUT FORMAT: One JSON object per line. No other text. No markdown:
 {"n":1,"text":"1/ tweet text"}
@@ -82,7 +91,7 @@ PACING:
 1/ Hook — short, provocative, makes you want to keep reading
 2/ Setup — a bit longer, gives context
 3/ Tension — short again. "But wait."
-4/ Payoff — the longest tweet. The insight. The Rashi. The Midrash.
+4/ Payoff — the longest tweet. The real insight from the text.
 5/ Reaction — short. Let it land.
 ...continue this rhythm.
 
@@ -93,7 +102,7 @@ Rules:
 - No hashtags. No emojis.
 - Thread numbering: 1/, 2/, etc.
 
-Text:
+Source text (base ALL your content on this):
 
 ${textList}`;
 

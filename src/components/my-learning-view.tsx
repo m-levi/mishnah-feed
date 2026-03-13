@@ -91,7 +91,7 @@ export function MyLearningView({
       totalSections: records.length,
       uniqueTexts: uniqueTexts.size,
       streak: calculateStreak(records),
-      recentActivity: records.slice(0, 8),
+      recentActivity: records.slice(0, 15),
       bySourceType: bySourceType as Record<
         SourceType,
         Record<string, string[]>
@@ -104,29 +104,68 @@ export function MyLearningView({
     loadProgress();
   }, [loadProgress]);
 
-  // Not logged in
+  // Not logged in — show local progress if available
   if (!user) {
+    let localRecords: { slug: string; ref: string; sourceType: string; displayName: string; timestamp: number }[] = [];
+    try {
+      const saved = localStorage.getItem("mishnah-feed-local-progress");
+      if (saved) localRecords = JSON.parse(saved);
+    } catch {}
+
     return (
-      <div className="flex flex-col items-center justify-center py-20 px-6 text-center">
-        <div className="w-16 h-16 rounded-full bg-[var(--accent-light)] flex items-center justify-center mb-4">
-          <BookOpen className="w-8 h-8 text-[var(--accent)]" />
+      <div className="px-4 py-4 pb-24">
+        {/* Sign in prompt */}
+        <div className="flex flex-col items-center text-center mb-6 py-6">
+          <div className="w-14 h-14 rounded-full bg-[var(--accent-light)] flex items-center justify-center mb-3">
+            <BookOpen className="w-7 h-7 text-[var(--accent)]" />
+          </div>
+          <h2
+            className="text-lg font-bold text-[var(--text)] mb-1"
+            style={{ fontFamily: "var(--font-display)" }}
+          >
+            Track Your Learning
+          </h2>
+          <p className="text-sm text-[var(--muted)] mb-4 max-w-xs">
+            Sign in to sync your progress across devices and track streaks.
+          </p>
+          <button
+            onClick={onShowAuth}
+            className="px-6 py-2.5 rounded-full bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white font-semibold text-sm transition-colors cursor-pointer"
+          >
+            Sign In
+          </button>
         </div>
-        <h2
-          className="text-lg font-bold text-[var(--text)] mb-2"
-          style={{ fontFamily: "var(--font-display)" }}
-        >
-          Track Your Learning
-        </h2>
-        <p className="text-sm text-[var(--muted)] mb-6 max-w-xs">
-          Sign in to save your progress, sync bookmarks, and see how far
-          you&apos;ve come.
-        </p>
-        <button
-          onClick={onShowAuth}
-          className="px-6 py-2.5 rounded-full bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white font-semibold text-sm transition-colors cursor-pointer"
-        >
-          Sign In to Get Started
-        </button>
+
+        {/* Show local progress */}
+        {localRecords.length > 0 && (
+          <div>
+            <h3
+              className="text-sm font-semibold text-[var(--accent)] uppercase tracking-wider mb-3"
+              style={{ fontFamily: "var(--font-display)" }}
+            >
+              Recent Activity (this device)
+            </h3>
+            <div className="space-y-1">
+              {localRecords.slice(0, 12).map((r, i) => (
+                <div
+                  key={`${r.slug}-${r.ref}-${i}`}
+                  className="flex items-center gap-3 py-2 px-3 rounded-lg hover:bg-[var(--bg)] transition-colors"
+                >
+                  <div className="w-2 h-2 rounded-full bg-[var(--accent)] flex-shrink-0" />
+                  <span className="text-sm text-[var(--text)] flex-1 truncate">
+                    {r.displayName}
+                  </span>
+                  <span className="text-[11px] text-[var(--muted)] flex-shrink-0">
+                    {new Date(r.timestamp).toLocaleDateString(undefined, {
+                      month: "short",
+                      day: "numeric",
+                    })}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     );
   }
