@@ -14,7 +14,7 @@ export function BookmarksSheet({ onClose, onTapTweet }: Props) {
 
   useEffect(() => {
     try {
-      const saved = localStorage.getItem("mishnah-feed-saved");
+      const saved = localStorage.getItem("scroll-saved");
       if (saved) setBookmarks(JSON.parse(saved));
     } catch {}
   }, []);
@@ -22,7 +22,7 @@ export function BookmarksSheet({ onClose, onTapTweet }: Props) {
   const removeBookmark = (id: string) => {
     const updated = bookmarks.filter((b) => b.id !== id);
     setBookmarks(updated);
-    localStorage.setItem("mishnah-feed-saved", JSON.stringify(updated));
+    localStorage.setItem("scroll-saved", JSON.stringify(updated));
   };
 
   useEffect(() => {

@@ -1,8 +1,8 @@
 "use client";
 
-import { Home, BookOpen } from "lucide-react";
+import { Home, Compass, BookOpen, User } from "lucide-react";
 
-export type AppView = "feed" | "learning";
+export type AppView = "feed" | "explore" | "library" | "profile";
 
 interface BottomNavProps {
   activeView: AppView;
@@ -10,8 +10,10 @@ interface BottomNavProps {
 }
 
 const items: { key: AppView; icon: typeof Home; label: string }[] = [
-  { key: "feed", icon: Home, label: "Home" },
-  { key: "learning", icon: BookOpen, label: "My Learning" },
+  { key: "feed", icon: Home, label: "Feed" },
+  { key: "explore", icon: Compass, label: "Explore" },
+  { key: "library", icon: BookOpen, label: "Library" },
+  { key: "profile", icon: User, label: "Profile" },
 ];
 
 export function BottomNav({ activeView, onNavigate }: BottomNavProps) {
@@ -24,7 +26,7 @@ export function BottomNav({ activeView, onNavigate }: BottomNavProps) {
             <button
               key={key}
               onClick={() => onNavigate(key)}
-              className={`flex flex-col items-center gap-0.5 px-6 py-1 transition-colors cursor-pointer ${
+              className={`flex flex-col items-center gap-0.5 px-4 py-1 transition-colors cursor-pointer ${
                 active ? "text-[var(--accent)]" : "text-[var(--muted)]"
               }`}
             >

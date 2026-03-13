@@ -13,6 +13,8 @@ import {
   Hash,
   ScrollText,
   BookText,
+  Compass,
+  Plus,
 } from "lucide-react";
 import { InlinePicker } from "@/components/mishnah-selector";
 import { StormCard } from "@/components/storm-card";
@@ -61,8 +63,8 @@ interface LastStudied {
   timestamp: number;
 }
 
-const LS_PICKER_KEY = "mishnah-feed-pickers";
-const LS_LAST_STUDIED_KEY = "mishnah-feed-last-studied";
+const LS_PICKER_KEY = "scroll-pickers";
+const LS_LAST_STUDIED_KEY = "scroll-last-studied";
 
 function loadPickerStates(): Record<string, PickerState> {
   try {
@@ -151,6 +153,212 @@ async function readStream(
   }
 }
 
+// ── Explore inline view ────────────────────────────────────
+function ExploreInline() {
+  const [scrolls, setScrolls] = useState<Array<{ id: string; title: string; description: string | null; cover_emoji: string | null; scroll_type: string; source_type: string; follower_count: number; is_public: boolean; is_template: boolean; created_at: string; updated_at: string; creator_id: string | null; config: Record<string, unknown> }>>([]);
+  const [templates, setTemplates] = useState<typeof scrolls>([]);
+  const [search, setSearch] = useState("");
+  const [category, setCategory] = useState("all");
+  const [loading, setLoading] = useState(true);
+
+  const cats = [
+    { key: "all", label: "All" },
+    { key: "mishnayos", label: "Mishnayos" },
+    { key: "gemara", label: "Gemara" },
+    { key: "chumash", label: "Tanakh" },
+    { key: "mixed", label: "Custom" },
+  ];
+
+  useEffect(() => {
+    const timer = setTimeout(async () => {
+      setLoading(true);
+      try {
+        const params = new URLSearchParams({ mode: "public", category });
+        if (search) params.set("search", search);
+        const [pubRes, tmplRes] = await Promise.all([
+          fetch(`/api/scrolls?${params}`),
+          fetch("/api/scrolls?mode=templates"),
+        ]);
+        if (pubRes.ok) setScrolls((await pubRes.json()).scrolls || []);
+        if (tmplRes.ok) setTemplates((await tmplRes.json()).scrolls || []);
+      } catch {} finally { setLoading(false); }
+    }, search ? 300 : 0);
+    return () => clearTimeout(timer);
+  }, [search, category]);
+
+  return (
+    <div>
+      <div className="sticky top-0 z-10 bg-[var(--card-bg)]/95 backdrop-blur-md border-b border-[var(--border)] no-print">
+        <div className="px-4 py-3">
+          <div className="sm:hidden flex items-center justify-between mb-3">
+            <h1 className="text-lg font-semibold text-[var(--text)]" style={{ fontFamily: "var(--font-display)" }}>
+              Explore
+            </h1>
+          </div>
+          <div className="relative">
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search scrolls..."
+              className="w-full pl-4 pr-4 py-2.5 rounded-xl border border-[var(--border)] bg-[var(--bg)] text-sm text-[var(--text)] placeholder:text-[var(--muted)] focus:outline-none focus:border-[var(--accent)]"
+            />
+          </div>
+          <div className="flex gap-1 mt-3 overflow-x-auto">
+            {cats.map((c) => (
+              <button
+                key={c.key}
+                onClick={() => setCategory(c.key)}
+                className={`px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap cursor-pointer transition-all ${
+                  category === c.key ? "bg-[var(--accent)] text-white" : "bg-[var(--bg)] text-[var(--muted)]"
+                }`}
+              >
+                {c.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+      <div className="px-4 py-4 pb-24">
+        {templates.length > 0 && !search && category === "all" && (
+          <div className="mb-6">
+            <h2 className="text-[10px] font-semibold text-[var(--muted)] uppercase tracking-wider mb-2">Get Started</h2>
+            <div className="space-y-2">
+              {templates.map((s) => (
+                <a key={s.id} href={`/scroll/${s.id}`} className="block w-full flex items-center gap-3 p-3.5 bg-[var(--card-bg)] rounded-xl border border-[var(--border)] hover:border-[var(--accent)]/50 transition-all">
+                  <div className="w-11 h-11 rounded-xl bg-[var(--accent-light)] flex items-center justify-center text-xl flex-shrink-0">{s.cover_emoji || "\uD83D\uDCDC"}</div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-semibold text-sm text-[var(--text)] truncate">{s.title}</div>
+                    {s.description && <p className="text-xs text-[var(--muted)] mt-0.5 line-clamp-1">{s.description}</p>}
+                  </div>
+                </a>
+              ))}
+            </div>
+          </div>
+        )}
+        {loading ? (
+          <div className="space-y-3">{[1,2,3].map(i => <div key={i} className="h-20 rounded-xl bg-[var(--card-bg)] border border-[var(--border)] skeleton-pulse" />)}</div>
+        ) : scrolls.length > 0 ? (
+          <div className="space-y-2">
+            {scrolls.map((s) => (
+              <a key={s.id} href={`/scroll/${s.id}`} className="block w-full flex items-center gap-3 p-3.5 bg-[var(--card-bg)] rounded-xl border border-[var(--border)] hover:border-[var(--accent)]/50 transition-all">
+                <div className="w-11 h-11 rounded-xl bg-[var(--accent-light)] flex items-center justify-center text-xl flex-shrink-0">{s.cover_emoji || "\uD83D\uDCDC"}</div>
+                <div className="flex-1 min-w-0">
+                  <div className="font-semibold text-sm text-[var(--text)] truncate">{s.title}</div>
+                  {s.description && <p className="text-xs text-[var(--muted)] mt-0.5 line-clamp-1">{s.description}</p>}
+                </div>
+              </a>
+            ))}
+          </div>
+        ) : (
+          <div className="text-center py-12">
+            <p className="text-sm text-[var(--muted)]">
+              {search ? "No scrolls found" : "No public scrolls yet"}
+            </p>
+            <a href="/create" className="inline-flex items-center gap-2 mt-3 px-5 py-2 rounded-xl bg-[var(--accent)] text-white text-sm font-semibold">
+              <Plus className="w-4 h-4" /> Create a Scroll
+            </a>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Library inline view ───────────────────────────────────
+function LibraryInline({ user, onShowAuth }: { user: { id: string; email?: string } | null; onShowAuth: () => void }) {
+  const [userScrolls, setUserScrolls] = useState<Array<{ id: string; scroll_id: string; is_creator: boolean; scroll: { id: string; title: string; description: string | null; cover_emoji: string | null; scroll_type: string; follower_count: number; source_type: string } }>>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!user) { setLoading(false); return; }
+    (async () => {
+      try {
+        const session = await supabase.auth.getSession();
+        const token = session.data.session?.access_token;
+        const res = await fetch("/api/scrolls?mode=mine", { headers: { Authorization: `Bearer ${token}` } });
+        if (res.ok) setUserScrolls((await res.json()).scrolls || []);
+      } catch {} finally { setLoading(false); }
+    })();
+  }, [user]);
+
+  const created = userScrolls.filter(us => us.is_creator);
+  const followed = userScrolls.filter(us => !us.is_creator);
+
+  return (
+    <div>
+      <div className="sticky top-0 z-10 bg-[var(--card-bg)]/95 backdrop-blur-md border-b border-[var(--border)] no-print">
+        <div className="px-4 py-3 flex items-center justify-between">
+          <h1 className="text-lg font-semibold text-[var(--text)]" style={{ fontFamily: "var(--font-display)" }}>My Scrolls</h1>
+          {user && (
+            <a href="/create" className="w-8 h-8 rounded-full bg-[var(--accent)] flex items-center justify-center text-white cursor-pointer hover:bg-[var(--accent-hover)] transition-colors">
+              <Plus className="w-4 h-4" />
+            </a>
+          )}
+        </div>
+      </div>
+      <div className="px-4 py-4 pb-24">
+        {!user ? (
+          <div className="flex flex-col items-center text-center py-12">
+            <div className="w-16 h-16 rounded-2xl bg-[var(--accent-light)] flex items-center justify-center mb-4">
+              <ScrollText className="w-8 h-8 text-[var(--accent)]" />
+            </div>
+            <h2 className="text-lg font-bold text-[var(--text)] mb-2" style={{ fontFamily: "var(--font-display)" }}>Your Learning Library</h2>
+            <p className="text-sm text-[var(--muted)] max-w-xs mb-4">Sign in to create scrolls and track your progress.</p>
+            <button onClick={onShowAuth} className="px-6 py-2.5 rounded-xl bg-[var(--accent)] text-white font-semibold text-sm cursor-pointer">Sign In</button>
+          </div>
+        ) : loading ? (
+          <div className="space-y-3">{[1,2,3].map(i => <div key={i} className="h-20 rounded-xl bg-[var(--card-bg)] border border-[var(--border)] skeleton-pulse" />)}</div>
+        ) : userScrolls.length === 0 ? (
+          <div className="flex flex-col items-center text-center py-12">
+            <div className="w-16 h-16 rounded-2xl bg-[var(--accent-light)] flex items-center justify-center mb-4">
+              <BookOpen className="w-8 h-8 text-[var(--accent)]" />
+            </div>
+            <h2 className="text-lg font-bold text-[var(--text)] mb-2" style={{ fontFamily: "var(--font-display)" }}>No scrolls yet</h2>
+            <p className="text-sm text-[var(--muted)] max-w-xs mb-4">Create your first scroll to start your learning journey.</p>
+            <a href="/create" className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-[var(--accent)] text-white font-semibold text-sm">
+              <Plus className="w-4 h-4" /> Create a Scroll
+            </a>
+          </div>
+        ) : (
+          <>
+            {created.length > 0 && (
+              <div className="mb-6">
+                <h2 className="text-[10px] font-semibold text-[var(--muted)] uppercase tracking-wider mb-2">My Scrolls</h2>
+                <div className="space-y-2">
+                  {created.map(us => (
+                    <a key={us.id} href={`/scroll/${us.scroll_id}`} className="block w-full flex items-center gap-3 p-3.5 bg-[var(--card-bg)] rounded-xl border border-[var(--border)] hover:border-[var(--accent)]/50 transition-all">
+                      <div className="w-11 h-11 rounded-xl bg-[var(--accent-light)] flex items-center justify-center text-xl flex-shrink-0">{us.scroll.cover_emoji || "\uD83D\uDCDC"}</div>
+                      <div className="flex-1 min-w-0">
+                        <div className="font-semibold text-sm text-[var(--text)] truncate">{us.scroll.title}</div>
+                      </div>
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
+            {followed.length > 0 && (
+              <div>
+                <h2 className="text-[10px] font-semibold text-[var(--muted)] uppercase tracking-wider mb-2">Following</h2>
+                <div className="space-y-2">
+                  {followed.map(us => (
+                    <a key={us.id} href={`/scroll/${us.scroll_id}`} className="block w-full flex items-center gap-3 p-3.5 bg-[var(--card-bg)] rounded-xl border border-[var(--border)] hover:border-[var(--accent)]/50 transition-all">
+                      <div className="w-11 h-11 rounded-xl bg-[var(--accent-light)] flex items-center justify-center text-xl flex-shrink-0">{us.scroll.cover_emoji || "\uD83D\uDCDC"}</div>
+                      <div className="flex-1 min-w-0">
+                        <div className="font-semibold text-sm text-[var(--text)] truncate">{us.scroll.title}</div>
+                      </div>
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Main component ─────────────────────────────────────────
 export default function HomePage() {
   const { user, checkUsageLimit, incrementUsage } = useAuth();
@@ -222,7 +430,7 @@ export default function HomePage() {
     async (slug: string, ref: string, sourceType: SourceType, displayName: string) => {
       // Always save to localStorage for anonymous tracking
       try {
-        const key = "mishnah-feed-local-progress";
+        const key = "scroll-local-progress";
         const saved = localStorage.getItem(key);
         const records: { slug: string; ref: string; sourceType: SourceType; displayName: string; timestamp: number }[] = saved ? JSON.parse(saved) : [];
         // Avoid duplicates
@@ -805,18 +1013,21 @@ export default function HomePage() {
   ).length;
   const activeTabIndex = tabs.findIndex((t) => t.key === activeTab);
 
-  const sidebarNavItems: { key: TabKey | "learning" | "bookmarks"; label: string; icon: typeof Home }[] = [
+  const sidebarNavItems: { key: string; label: string; icon: typeof Home }[] = [
     { key: "foryou", label: "For You", icon: Home },
-    { key: "mishnayos", label: "Mishnayos", icon: ScrollText },
+    { key: "explore", label: "Explore Scrolls", icon: Compass },
+    { key: "library", label: "My Scrolls", icon: ScrollText },
+    { key: "mishnayos", label: "Mishnayos", icon: BookText },
     { key: "gemara", label: "Gemara", icon: BookText },
     { key: "chumash", label: "Tanakh", icon: Hash },
-    { key: "learning", label: "My Learning", icon: BookOpen },
     { key: "bookmarks", label: "Bookmarks", icon: Bookmark },
   ];
 
   const handleSidebarNav = useCallback((key: string) => {
-    if (key === "learning") {
-      setAppView("learning");
+    if (key === "explore") {
+      setAppView("explore");
+    } else if (key === "library") {
+      setAppView("library");
     } else if (key === "bookmarks") {
       setAppView("feed");
       setShowBookmarks(true);
@@ -826,7 +1037,7 @@ export default function HomePage() {
     }
   }, [handleTabChange]);
 
-  const activeSidebarKey = appView === "learning" ? "learning" : activeTab;
+  const activeSidebarKey = appView === "explore" ? "explore" : appView === "library" ? "library" : activeTab;
 
   return (
     <div className="min-h-screen bg-[var(--bg)] pb-16 sm:pb-0 sm:flex sm:justify-center">
@@ -838,7 +1049,7 @@ export default function HomePage() {
             className="text-xl font-bold text-[var(--text)]"
             style={{ fontFamily: "var(--font-display)" }}
           >
-            MishnahFeed
+            Scroll
           </h1>
         </div>
 
@@ -863,6 +1074,17 @@ export default function HomePage() {
           })}
         </nav>
 
+        {/* Create scroll button */}
+        <div className="px-3 mt-4">
+          <a
+            href="/create"
+            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-full bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white font-semibold text-sm transition-colors"
+          >
+            <Plus className="w-4 h-4" />
+            New Scroll
+          </a>
+        </div>
+
         {/* User section at bottom */}
         <div className="px-3 pb-4 mt-auto">
           {!user ? (
@@ -875,7 +1097,7 @@ export default function HomePage() {
             </button>
           ) : (
             <button
-              onClick={() => handleSidebarNav("learning")}
+              onClick={() => handleSidebarNav("library")}
               className="w-full flex items-center gap-3 px-3 py-2.5 rounded-full hover:bg-[var(--bg)] transition-colors cursor-pointer"
             >
               <div className="w-8 h-8 rounded-full bg-[var(--accent)] flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
@@ -900,7 +1122,7 @@ export default function HomePage() {
                 className="text-lg font-semibold text-[var(--text)]"
                 style={{ fontFamily: "var(--font-display)" }}
               >
-                MishnahFeed
+                Scroll
               </h1>
 
               <div className="flex gap-0.5">
@@ -921,7 +1143,7 @@ export default function HomePage() {
                   </button>
                 ) : (
                   <button
-                    onClick={() => setAppView("learning")}
+                    onClick={() => setAppView("library")}
                     className="w-8 h-8 rounded-full bg-[var(--accent)] flex items-center justify-center text-white text-xs font-bold cursor-pointer"
                     title={user.email || "Profile"}
                   >
@@ -1162,32 +1384,29 @@ export default function HomePage() {
         </>
       )}
 
-      {/* ─── MY LEARNING VIEW ─── */}
-      {appView === "learning" && (
-        <div>
-          <div className="sticky top-0 z-10 bg-[var(--card-bg)]/95 backdrop-blur-md border-b border-[var(--border)] no-print">
-            <div className="px-4 py-3 flex items-center justify-between">
-              <h1
-                className="text-lg font-semibold text-[var(--text)]"
-                style={{ fontFamily: "var(--font-display)" }}
-              >
-                My Learning
-              </h1>
-              <button
-                onClick={() => setAppView("feed")}
-                className="sm:hidden text-sm text-[var(--accent)] font-medium hover:underline cursor-pointer"
-              >
-                Back to Feed
-              </button>
-            </div>
-          </div>
-          <MyLearningView onShowAuth={() => setShowAuth(true)} />
-        </div>
+      {/* ─── EXPLORE VIEW ─── */}
+      {appView === "explore" && (
+        <ExploreInline />
+      )}
+
+      {/* ─── LIBRARY VIEW ─── */}
+      {appView === "library" && (
+        <LibraryInline user={user} onShowAuth={() => setShowAuth(true)} />
       )}
       </div>{/* end main content area */}
 
       {/* Bottom navigation (mobile) */}
-      <BottomNav activeView={appView} onNavigate={setAppView} />
+      <BottomNav activeView={appView} onNavigate={(view) => {
+        if (view === "profile") {
+          if (!user) {
+            setShowAuth(true);
+          } else {
+            setAppView("library");
+          }
+        } else {
+          setAppView(view);
+        }
+      }} />
 
       {/* Commentary page */}
       {selectedTweet && (

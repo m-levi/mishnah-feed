@@ -25,7 +25,7 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | null>(null);
 
 const DAILY_LIMIT = 5;
-const USAGE_KEY = "mishnah-feed-usage";
+const USAGE_KEY = "scroll-usage";
 
 function getUsageToday(): number {
   try {

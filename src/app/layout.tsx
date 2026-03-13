@@ -16,9 +16,9 @@ const dmSans = DM_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "MishnahFeed",
+  title: "Scroll",
   description:
-    "Torah learning, reimagined — bite-sized insights from Mishnah, Gemara, and Tanakh",
+    "Replace doom scrolling with Torah scrolling — personalized bite-sized learning paths",
 };
 
 export const viewport: Viewport = {
