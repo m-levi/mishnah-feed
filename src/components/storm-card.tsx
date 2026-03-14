@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { ImageIcon, MessageCircle, Copy, Check, Heart, Bookmark } from "lucide-react";
+import { ImageCarousel } from "@/components/image-carousel";
 import type { StormTweet } from "@/lib/types";
 
 interface StormCardProps {
@@ -159,8 +160,8 @@ export function StormCard({ tweet, onTap }: StormCardProps) {
             {tweet.text}
           </p>
 
-          {/* Image */}
-          {tweet.needsImage && (
+          {/* Single image */}
+          {tweet.needsImage && !tweet.carousel && (
             <div className="mt-3 rounded-2xl overflow-hidden border border-[var(--border)]">
               {tweet.imageData ? (
                 <img
@@ -182,6 +183,14 @@ export function StormCard({ tweet, onTap }: StormCardProps) {
                 </div>
               )}
             </div>
+          )}
+
+          {/* Image carousel */}
+          {tweet.carousel && tweet.carousel.length > 0 && (
+            <ImageCarousel
+              images={tweet.carousel}
+              alt={`Illustrations for ${tweet.ref}`}
+            />
           )}
 
           {/* Action bar — only on last card (or single card) */}
