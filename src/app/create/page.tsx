@@ -2,10 +2,12 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Plus, Library, Sparkles } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { AuthModal } from "@/components/auth-modal";
+import { ScrollBook } from "@/components/scroll-book";
 import { getCategories } from "@/lib/source-data";
+import { premadeScrolls, type PremadeScroll } from "@/lib/premade-scrolls";
 import type {
   SourceType,
   ScrollType,
@@ -16,16 +18,26 @@ import type {
 } from "@/lib/types";
 import { supabase } from "@/lib/supabase";
 
-type Step = "type" | "configure" | "finalize";
+type Step = "browse" | "type" | "configure" | "finalize";
+
+const LIBRARY_TABS = [
+  { key: "all", label: "All" },
+  { key: "popular", label: "Popular" },
+  { key: "daily", label: "Daily" },
+  { key: "mishnayos", label: "Mishnayos" },
+  { key: "gemara", label: "Gemara" },
+  { key: "tanakh", label: "Tanakh" },
+];
 
 export default function CreateScrollPage() {
   const router = useRouter();
   const { user } = useAuth();
   const [showAuth, setShowAuth] = useState(false);
 
-  const [step, setStep] = useState<Step>("type");
+  const [step, setStep] = useState<Step>("browse");
   const [scrollType, setScrollType] = useState<ScrollType | null>(null);
   const [creating, setCreating] = useState(false);
+  const [libraryTab, setLibraryTab] = useState("all");
 
   // Structured config
   const [sourceType, setSourceType] = useState<SourceType>("mishnayos");
@@ -47,9 +59,53 @@ export default function CreateScrollPage() {
   const selectedItem = selectedCategory && itemIndex >= 0 ? selectedCategory.items[itemIndex] : null;
 
   const goBack = () => {
-    if (step === "type") router.back();
+    if (step === "browse") router.back();
+    else if (step === "type") setStep("browse");
     else if (step === "configure") setStep("type");
     else setStep("configure");
+  };
+
+  const filteredScrolls = libraryTab === "all"
+    ? premadeScrolls
+    : libraryTab === "popular"
+      ? premadeScrolls.filter(s => ["pirkei-avos", "daf-yomi", "daily-mishnah", "tehillim", "weekly-parsha", "bereishis"].includes(s.id))
+      : premadeScrolls.filter(s => s.category === libraryTab);
+
+  const handlePickPremade = async (premade: PremadeScroll) => {
+    if (!user) {
+      setShowAuth(true);
+      return;
+    }
+
+    setCreating(true);
+
+    try {
+      const session = await supabase.auth.getSession();
+      const token = session.data.session?.access_token;
+
+      const res = await fetch("/api/scrolls", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          title: premade.title,
+          description: premade.description,
+          scroll_type: premade.scroll_type,
+          source_type: premade.source_type,
+          config: premade.config,
+          is_public: false,
+          cover_emoji: premade.emoji,
+        }),
+      });
+
+      if (!res.ok) throw new Error("Failed to create");
+      const data = await res.json();
+      router.push(`/scroll/${data.scroll.id}`);
+    } catch {
+      setCreating(false);
+    }
   };
 
   const handleCreate = async () => {
@@ -120,6 +176,91 @@ export default function CreateScrollPage() {
       </div>
 
       <div className="max-w-md mx-auto px-5 pb-12">
+        {/* ── Browse Library ── */}
+        {step === "browse" && (
+          <div className="fade-in">
+            <h1
+              className="text-2xl font-bold text-[var(--text)] mb-1"
+              style={{ fontFamily: "var(--font-display)" }}
+            >
+              Add a Scroll
+            </h1>
+            <p className="text-[13px] text-[var(--muted)] mb-5">
+              Pick from the library or build your own.
+            </p>
+
+            {/* Create your own button */}
+            <button
+              onClick={() => setStep("type")}
+              className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 border-dashed border-[var(--accent-muted)] hover:border-[var(--accent)] bg-[var(--accent-light)] hover:bg-[var(--accent-light)] transition-all cursor-pointer group mb-6"
+            >
+              <div className="w-9 h-9 rounded-lg bg-[var(--accent)]/10 flex items-center justify-center">
+                <Plus className="w-4 h-4 text-[var(--accent)]" />
+              </div>
+              <div className="text-left">
+                <span className="text-[13px] font-semibold text-[var(--accent)] group-hover:text-[var(--accent-hover)]">
+                  Create your own
+                </span>
+                <span className="block text-[11px] text-[var(--muted)]">
+                  Custom text, topic, or schedule
+                </span>
+              </div>
+            </button>
+
+            {/* Library section */}
+            <div className="flex items-center gap-1.5 mb-3">
+              <Library className="w-3.5 h-3.5 text-[var(--muted)]" />
+              <span className="text-[10px] font-semibold text-[var(--muted)] uppercase tracking-wider">
+                Scroll Library
+              </span>
+            </div>
+
+            {/* Category tabs */}
+            <div className="flex gap-1 mb-4 overflow-x-auto no-scrollbar">
+              {LIBRARY_TABS.map((tab) => (
+                <button
+                  key={tab.key}
+                  onClick={() => setLibraryTab(tab.key)}
+                  className={`px-3 py-1.5 rounded-full text-[11px] font-semibold whitespace-nowrap transition-all cursor-pointer ${
+                    libraryTab === tab.key
+                      ? "bg-[var(--accent)] text-white"
+                      : "bg-[var(--card-bg)] text-[var(--muted)] hover:text-[var(--text)]"
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Book grid */}
+            <div className="grid grid-cols-3 gap-3">
+              {filteredScrolls.map((premade) => (
+                <button
+                  key={premade.id}
+                  onClick={() => handlePickPremade(premade)}
+                  disabled={creating}
+                  className="flex flex-col items-center gap-2 p-3 rounded-xl bg-[var(--card-bg)] border border-[var(--border)] hover:border-[var(--accent)]/40 hover:shadow-md transition-all cursor-pointer group disabled:opacity-50"
+                >
+                  <ScrollBook
+                    title={premade.title}
+                    emoji={premade.emoji}
+                    color={premade.color}
+                    size="sm"
+                  />
+                  <div className="text-center w-full">
+                    <div className="text-[11px] font-semibold text-[var(--text)] truncate leading-tight">
+                      {premade.title}
+                    </div>
+                    <div className="text-[9px] text-[var(--muted)] mt-0.5 line-clamp-2 leading-tight">
+                      {premade.description}
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* ── Step 1: What kind? ── */}
         {step === "type" && (
           <div className="fade-in">
@@ -374,6 +515,16 @@ export default function CreateScrollPage() {
           </div>
         )}
       </div>
+
+      {/* Creating overlay for premade */}
+      {creating && step === "browse" && (
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
+          <div className="bg-[var(--card-bg)] rounded-2xl px-8 py-6 flex flex-col items-center gap-3 shadow-xl">
+            <Sparkles className="w-6 h-6 text-[var(--accent)] animate-pulse" />
+            <span className="text-sm font-semibold text-[var(--text)]">Creating your scroll...</span>
+          </div>
+        </div>
+      )}
 
       {showAuth && (
         <AuthModal
