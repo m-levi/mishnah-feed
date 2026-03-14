@@ -56,8 +56,8 @@ export default function ExplorePage() {
   return (
     <div className="min-h-screen bg-[var(--bg)]">
       {/* Header */}
-      <div className="sticky top-0 z-10 bg-[var(--card-bg)]/95 backdrop-blur-md border-b border-[var(--border)]">
-        <div className="max-w-lg mx-auto px-4 py-3">
+      <div className="sticky top-0 z-10 bg-[var(--card-bg)]/95 backdrop-blur-xl border-b border-[var(--border)]">
+        <div className="max-w-lg mx-auto px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-3">
           <h1
             className="text-lg font-semibold text-[var(--text)] mb-3"
             style={{ fontFamily: "var(--font-display)" }}
@@ -78,15 +78,15 @@ export default function ExplorePage() {
           </div>
 
           {/* Category tabs */}
-          <div className="flex gap-1 mt-3 overflow-x-auto no-scrollbar">
+          <div className="flex gap-1.5 mt-3 overflow-x-auto no-scrollbar -mx-4 px-4">
             {CATEGORIES.map((cat) => (
               <button
                 key={cat.key}
                 onClick={() => setCategory(cat.key)}
-                className={`px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
+                className={`px-3.5 py-2 rounded-full text-xs font-semibold whitespace-nowrap transition-all duration-200 cursor-pointer active:scale-95 ${
                   category === cat.key
-                    ? "bg-[var(--accent)] text-white"
-                    : "bg-[var(--bg)] text-[var(--muted)] hover:text-[var(--text)]"
+                    ? "bg-[var(--accent)] text-white shadow-sm"
+                    : "bg-[var(--bg)] text-[var(--muted)] hover:text-[var(--text)] active:bg-[var(--border)]"
                 }`}
               >
                 {cat.label}

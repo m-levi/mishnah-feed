@@ -165,10 +165,10 @@ export default function CreateScrollPage() {
     <div className="min-h-screen bg-[var(--bg)]">
       {/* Minimal header */}
       <div className="sticky top-0 z-10 bg-[var(--bg)]">
-        <div className="max-w-md mx-auto px-5 py-4">
+        <div className="max-w-md mx-auto px-5 pt-[max(1rem,env(safe-area-inset-top))] pb-3">
           <button
             onClick={goBack}
-            className="w-8 h-8 -ml-1 rounded-full hover:bg-[var(--card-bg)] flex items-center justify-center transition-colors cursor-pointer"
+            className="w-9 h-9 -ml-1 rounded-full hover:bg-[var(--card-bg)] active:bg-[var(--border)] flex items-center justify-center transition-colors cursor-pointer"
           >
             <ArrowLeft className="w-5 h-5 text-[var(--muted)]" />
           </button>

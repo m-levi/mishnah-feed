@@ -51,8 +51,8 @@ export default function LibraryPage() {
   return (
     <div className="min-h-screen bg-[var(--bg)]">
       {/* Header */}
-      <div className="sticky top-0 z-10 bg-[var(--card-bg)]/95 backdrop-blur-md border-b border-[var(--border)]">
-        <div className="max-w-lg mx-auto px-4 py-3 flex items-center justify-between">
+      <div className="sticky top-0 z-10 bg-[var(--card-bg)]/95 backdrop-blur-xl border-b border-[var(--border)]">
+        <div className="max-w-lg mx-auto px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-3 flex items-center justify-between">
           <h1
             className="text-lg font-semibold text-[var(--text)]"
             style={{ fontFamily: "var(--font-display)" }}
@@ -67,7 +67,7 @@ export default function LibraryPage() {
               }
               router.push("/create");
             }}
-            className="w-8 h-8 rounded-full bg-[var(--accent)] flex items-center justify-center text-white cursor-pointer hover:bg-[var(--accent-hover)] transition-colors"
+            className="w-9 h-9 rounded-full bg-[var(--accent)] flex items-center justify-center text-white cursor-pointer hover:bg-[var(--accent-hover)] active:scale-90 transition-all duration-150"
           >
             <Plus className="w-4 h-4" />
           </button>

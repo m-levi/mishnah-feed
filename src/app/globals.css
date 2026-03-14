@@ -197,9 +197,50 @@ button {
     inset -1px 0 1px rgba(255,255,255,0.1) !important;
 }
 
-/* No-scrollbar */
-.no-scrollbar::-webkit-scrollbar { display: none; }
-.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+/* Hide scrollbar utility (for horizontal pill scrollers) */
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Overscroll containment for mobile app-feel */
+html, body {
+  overscroll-behavior-y: contain;
+}
+
+/* Smooth momentum scrolling on iOS */
+.overflow-y-auto,
+.overflow-x-auto {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Active press state for interactive cards */
+.press-card {
+  transition: transform 0.15s ease, background-color 0.15s ease;
+}
+.press-card:active {
+  transform: scale(0.985);
+}
+
+/* Bottom sheet slide-down dismiss animation */
+@keyframes slideDown {
+  from { transform: translateY(0); }
+  to { transform: translateY(100%); }
+}
+
+/* Gentle spring pop for tab switch indicator */
+@keyframes tabIndicatorIn {
+  0% { transform: translateX(-50%) scaleX(0); }
+  60% { transform: translateX(-50%) scaleX(1.2); }
+  100% { transform: translateX(-50%) scaleX(1); }
+}
+
+.tab-indicator {
+  animation: tabIndicatorIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
 
 /* Carousel */
 .carousel-track {
