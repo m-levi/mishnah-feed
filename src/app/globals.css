@@ -15,6 +15,14 @@
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.03);
   --shadow: 0 1px 3px rgba(0, 0, 0, 0.05), 0 1px 2px rgba(0, 0, 0, 0.03);
   --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.06);
+
+  /* Commentary colors — warm palette */
+  --comm-1-bg: #FFFBEB; --comm-1-border: #FDE68A; --comm-1-text: #92400E;
+  --comm-2-bg: #F0FDF4; --comm-2-border: #BBF7D0; --comm-2-text: #166534;
+  --comm-3-bg: #FFF7ED; --comm-3-border: #FED7AA; --comm-3-text: #9A3412;
+  --comm-4-bg: #FDF2F8; --comm-4-border: #FBCFE8; --comm-4-text: #9D174D;
+  --comm-5-bg: #FAF5FF; --comm-5-border: #E9D5FF; --comm-5-text: #6B21A8;
+  --comm-6-bg: #F0FDFA; --comm-6-border: #99F6E4; --comm-6-text: #115E59;
 }
 
 * {
@@ -34,7 +42,7 @@ body {
 }
 
 .shimmer {
-  background: linear-gradient(90deg, #F0EEEB 25%, #E6E3DF 50%, #F0EEEB 75%);
+  background: linear-gradient(90deg, var(--border) 25%, color-mix(in srgb, var(--border) 70%, var(--bg)) 50%, var(--border) 75%);
   background-size: 400px 100%;
   animation: shimmer 1.8s ease-in-out infinite;
 }

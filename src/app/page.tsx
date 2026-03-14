@@ -10,30 +10,26 @@ import {
   ChevronRight,
   User,
   Home,
-  Hash,
   ScrollText,
-  BookText,
+  Compass,
+  Plus,
 } from "lucide-react";
-import { InlinePicker } from "@/components/mishnah-selector";
 import { StormCard } from "@/components/storm-card";
 import { TweetSkeleton } from "@/components/tweet-skeleton";
 import { CommentaryView } from "@/components/commentary-view";
 import { BookmarksSheet } from "@/components/bookmarks-sheet";
-import { BottomNav, type AppView } from "@/components/bottom-nav";
-import { MyLearningView } from "@/components/my-learning-view";
 import { AuthModal } from "@/components/auth-modal";
 import { useAuth } from "@/lib/auth-context";
 import { supabase } from "@/lib/supabase";
 import { getItemFromState, getNextRef } from "@/lib/source-data";
 import type { StormTweet, SourceType, PickerState } from "@/lib/types";
 
-type TabKey = "foryou" | "mishnayos" | "gemara" | "chumash";
+type TabKey = "foryou" | "myscrolls" | "search";
 
 const tabs: { key: TabKey; label: string }[] = [
   { key: "foryou", label: "For You" },
-  { key: "mishnayos", label: "Mishnayos" },
-  { key: "gemara", label: "Gemara" },
-  { key: "chumash", label: "Tanakh" },
+  { key: "myscrolls", label: "My Scrolls" },
+  { key: "search", label: "Search" },
 ];
 
 const defaultPickerState: PickerState = {
@@ -61,8 +57,8 @@ interface LastStudied {
   timestamp: number;
 }
 
-const LS_PICKER_KEY = "mishnah-feed-pickers";
-const LS_LAST_STUDIED_KEY = "mishnah-feed-last-studied";
+const LS_PICKER_KEY = "scroll-pickers";
+const LS_LAST_STUDIED_KEY = "scroll-last-studied";
 
 function loadPickerStates(): Record<string, PickerState> {
   try {
@@ -151,11 +147,199 @@ async function readStream(
   }
 }
 
+// ── Explore inline view ────────────────────────────────────
+function ExploreInline() {
+  const [scrolls, setScrolls] = useState<Array<{ id: string; title: string; description: string | null; cover_emoji: string | null; scroll_type: string; source_type: string; follower_count: number; is_public: boolean; is_template: boolean; created_at: string; updated_at: string; creator_id: string | null; config: Record<string, unknown> }>>([]);
+  const [templates, setTemplates] = useState<typeof scrolls>([]);
+  const [search, setSearch] = useState("");
+  const [category, setCategory] = useState("all");
+  const [loading, setLoading] = useState(true);
+
+  const cats = [
+    { key: "all", label: "All" },
+    { key: "mishnayos", label: "Mishnayos" },
+    { key: "gemara", label: "Gemara" },
+    { key: "chumash", label: "Tanakh" },
+    { key: "mixed", label: "Custom" },
+  ];
+
+  useEffect(() => {
+    const timer = setTimeout(async () => {
+      setLoading(true);
+      try {
+        const params = new URLSearchParams({ mode: "public", category });
+        if (search) params.set("search", search);
+        const [pubRes, tmplRes] = await Promise.all([
+          fetch(`/api/scrolls?${params}`),
+          fetch("/api/scrolls?mode=templates"),
+        ]);
+        if (pubRes.ok) setScrolls((await pubRes.json()).scrolls || []);
+        if (tmplRes.ok) setTemplates((await tmplRes.json()).scrolls || []);
+      } catch {} finally { setLoading(false); }
+    }, search ? 300 : 0);
+    return () => clearTimeout(timer);
+  }, [search, category]);
+
+  return (
+    <div>
+      <div className="px-4 py-3 border-b border-[var(--border)]">
+        <div className="relative">
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search scrolls..."
+            className="w-full pl-4 pr-4 py-2.5 rounded-xl border border-[var(--border)] bg-[var(--bg)] text-sm text-[var(--text)] placeholder:text-[var(--muted)] focus:outline-none focus:border-[var(--accent)]"
+          />
+        </div>
+        <div className="flex gap-1 mt-3 overflow-x-auto">
+          {cats.map((c) => (
+            <button
+              key={c.key}
+              onClick={() => setCategory(c.key)}
+              className={`px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap cursor-pointer transition-all ${
+                category === c.key ? "bg-[var(--accent)] text-white" : "bg-[var(--bg)] text-[var(--muted)]"
+              }`}
+            >
+              {c.label}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="px-4 py-4 pb-24">
+        {templates.length > 0 && !search && category === "all" && (
+          <div className="mb-6">
+            <h2 className="text-[10px] font-semibold text-[var(--muted)] uppercase tracking-wider mb-2">Get Started</h2>
+            <div className="space-y-2">
+              {templates.map((s) => (
+                <a key={s.id} href={`/scroll/${s.id}`} className="block w-full flex items-center gap-3 p-3.5 bg-[var(--card-bg)] rounded-xl border border-[var(--border)] hover:border-[var(--accent)]/50 transition-all">
+                  <div className="w-11 h-11 rounded-xl bg-[var(--accent-light)] flex items-center justify-center text-xl flex-shrink-0">{s.cover_emoji || "\uD83D\uDCDC"}</div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-semibold text-sm text-[var(--text)] truncate">{s.title}</div>
+                    {s.description && <p className="text-xs text-[var(--muted)] mt-0.5 line-clamp-1">{s.description}</p>}
+                  </div>
+                </a>
+              ))}
+            </div>
+          </div>
+        )}
+        {loading ? (
+          <div className="space-y-3">{[1,2,3].map(i => <div key={i} className="h-20 rounded-xl bg-[var(--card-bg)] border border-[var(--border)] skeleton-pulse" />)}</div>
+        ) : scrolls.length > 0 ? (
+          <div className="space-y-2">
+            {scrolls.map((s) => (
+              <a key={s.id} href={`/scroll/${s.id}`} className="block w-full flex items-center gap-3 p-3.5 bg-[var(--card-bg)] rounded-xl border border-[var(--border)] hover:border-[var(--accent)]/50 transition-all">
+                <div className="w-11 h-11 rounded-xl bg-[var(--accent-light)] flex items-center justify-center text-xl flex-shrink-0">{s.cover_emoji || "\uD83D\uDCDC"}</div>
+                <div className="flex-1 min-w-0">
+                  <div className="font-semibold text-sm text-[var(--text)] truncate">{s.title}</div>
+                  {s.description && <p className="text-xs text-[var(--muted)] mt-0.5 line-clamp-1">{s.description}</p>}
+                </div>
+              </a>
+            ))}
+          </div>
+        ) : (
+          <div className="text-center py-12">
+            <p className="text-sm text-[var(--muted)]">
+              {search ? "No scrolls found" : "No public scrolls yet"}
+            </p>
+            <a href="/create" className="inline-flex items-center gap-2 mt-3 px-5 py-2 rounded-xl bg-[var(--accent)] text-white text-sm font-semibold">
+              <Plus className="w-4 h-4" /> Create a Scroll
+            </a>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Library inline view ───────────────────────────────────
+function LibraryInline({ user, onShowAuth }: { user: { id: string; email?: string } | null; onShowAuth: () => void }) {
+  const [userScrolls, setUserScrolls] = useState<Array<{ id: string; scroll_id: string; is_creator: boolean; scroll: { id: string; title: string; description: string | null; cover_emoji: string | null; scroll_type: string; follower_count: number; source_type: string } }>>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!user) { setLoading(false); return; }
+    (async () => {
+      try {
+        const session = await supabase.auth.getSession();
+        const token = session.data.session?.access_token;
+        const res = await fetch("/api/scrolls?mode=mine", { headers: { Authorization: `Bearer ${token}` } });
+        if (res.ok) setUserScrolls((await res.json()).scrolls || []);
+      } catch {} finally { setLoading(false); }
+    })();
+  }, [user]);
+
+  const created = userScrolls.filter(us => us.is_creator);
+  const followed = userScrolls.filter(us => !us.is_creator);
+
+  return (
+    <div>
+      <div className="px-4 py-4 pb-24">
+        {!user ? (
+          <div className="flex flex-col items-center text-center py-12">
+            <div className="w-16 h-16 rounded-2xl bg-[var(--accent-light)] flex items-center justify-center mb-4">
+              <ScrollText className="w-8 h-8 text-[var(--accent)]" />
+            </div>
+            <h2 className="text-lg font-bold text-[var(--text)] mb-2" style={{ fontFamily: "var(--font-display)" }}>Your Learning Library</h2>
+            <p className="text-sm text-[var(--muted)] max-w-xs mb-4">Sign in to create scrolls and track your progress.</p>
+            <button onClick={onShowAuth} className="px-6 py-2.5 rounded-xl bg-[var(--accent)] text-white font-semibold text-sm cursor-pointer">Sign In</button>
+          </div>
+        ) : loading ? (
+          <div className="space-y-3">{[1,2,3].map(i => <div key={i} className="h-20 rounded-xl bg-[var(--card-bg)] border border-[var(--border)] skeleton-pulse" />)}</div>
+        ) : userScrolls.length === 0 ? (
+          <div className="flex flex-col items-center text-center py-12">
+            <div className="w-16 h-16 rounded-2xl bg-[var(--accent-light)] flex items-center justify-center mb-4">
+              <BookOpen className="w-8 h-8 text-[var(--accent)]" />
+            </div>
+            <h2 className="text-lg font-bold text-[var(--text)] mb-2" style={{ fontFamily: "var(--font-display)" }}>No scrolls yet</h2>
+            <p className="text-sm text-[var(--muted)] max-w-xs mb-4">Create your first scroll to start your learning journey.</p>
+            <a href="/create" className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-[var(--accent)] text-white font-semibold text-sm">
+              <Plus className="w-4 h-4" /> Create a Scroll
+            </a>
+          </div>
+        ) : (
+          <>
+            {created.length > 0 && (
+              <div className="mb-6">
+                <h2 className="text-[10px] font-semibold text-[var(--muted)] uppercase tracking-wider mb-2">My Scrolls</h2>
+                <div className="space-y-2">
+                  {created.map(us => (
+                    <a key={us.id} href={`/scroll/${us.scroll_id}`} className="block w-full flex items-center gap-3 p-3.5 bg-[var(--card-bg)] rounded-xl border border-[var(--border)] hover:border-[var(--accent)]/50 transition-all">
+                      <div className="w-11 h-11 rounded-xl bg-[var(--accent-light)] flex items-center justify-center text-xl flex-shrink-0">{us.scroll.cover_emoji || "\uD83D\uDCDC"}</div>
+                      <div className="flex-1 min-w-0">
+                        <div className="font-semibold text-sm text-[var(--text)] truncate">{us.scroll.title}</div>
+                      </div>
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
+            {followed.length > 0 && (
+              <div>
+                <h2 className="text-[10px] font-semibold text-[var(--muted)] uppercase tracking-wider mb-2">Following</h2>
+                <div className="space-y-2">
+                  {followed.map(us => (
+                    <a key={us.id} href={`/scroll/${us.scroll_id}`} className="block w-full flex items-center gap-3 p-3.5 bg-[var(--card-bg)] rounded-xl border border-[var(--border)] hover:border-[var(--accent)]/50 transition-all">
+                      <div className="w-11 h-11 rounded-xl bg-[var(--accent-light)] flex items-center justify-center text-xl flex-shrink-0">{us.scroll.cover_emoji || "\uD83D\uDCDC"}</div>
+                      <div className="flex-1 min-w-0">
+                        <div className="font-semibold text-sm text-[var(--text)] truncate">{us.scroll.title}</div>
+                      </div>
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Main component ─────────────────────────────────────────
 export default function HomePage() {
   const { user, checkUsageLimit, incrementUsage } = useAuth();
 
-  const [appView, setAppView] = useState<AppView>("feed");
   const [activeTab, setActiveTab] = useState<TabKey>("foryou");
   const [tweets, setTweets] = useState<StormTweet[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -222,7 +406,7 @@ export default function HomePage() {
     async (slug: string, ref: string, sourceType: SourceType, displayName: string) => {
       // Always save to localStorage for anonymous tracking
       try {
-        const key = "mishnah-feed-local-progress";
+        const key = "scroll-local-progress";
         const saved = localStorage.getItem(key);
         const records: { slug: string; ref: string; sourceType: SourceType; displayName: string; timestamp: number }[] = saved ? JSON.parse(saved) : [];
         // Avoid duplicates
@@ -340,9 +524,10 @@ export default function HomePage() {
 
       abortActiveStream();
 
-      if (tweets.length > 0) {
-        feedCacheRef.current[activeTab] = {
-          ...feedCacheRef.current[activeTab],
+      // Cache current feed state if leaving the feed tab
+      if (activeTab === "foryou" && tweets.length > 0) {
+        feedCacheRef.current["foryou"] = {
+          ...feedCacheRef.current["foryou"],
           tweets: [...tweets],
           selection: currentSelection,
         };
@@ -356,25 +541,24 @@ export default function HomePage() {
       setLoadingMore(false);
       setReachedEnd(false);
 
-      const cached = feedCacheRef.current[tab];
-      if (cached && cached.tweets.length > 0) {
-        setTweets(cached.tweets);
-        setCurrentSelection(cached.selection);
-        if (cached.slug && cached.ref && cached.sourceType) {
-          currentFeedCtx.current = {
-            slug: cached.slug,
-            ref: cached.ref,
-            sourceType: cached.sourceType,
-          };
+      // Restore feed cache when switching back to For You
+      if (tab === "foryou") {
+        const cached = feedCacheRef.current["foryou"];
+        if (cached && cached.tweets.length > 0) {
+          setTweets(cached.tweets);
+          setCurrentSelection(cached.selection);
+          if (cached.slug && cached.ref && cached.sourceType) {
+            currentFeedCtx.current = {
+              slug: cached.slug,
+              ref: cached.ref,
+              sourceType: cached.sourceType,
+            };
+          } else {
+            currentFeedCtx.current = null;
+          }
         } else {
-          currentFeedCtx.current = null;
+          loadDiscoverFeed();
         }
-      } else if (tab === "foryou") {
-        loadDiscoverFeed();
-      } else {
-        setTweets([]);
-        setCurrentSelection("");
-        currentFeedCtx.current = null;
       }
     },
     [activeTab, tweets, currentSelection, abortActiveStream, loadDiscoverFeed]
@@ -777,14 +961,7 @@ export default function HomePage() {
 
   const handleContinueLearning = useCallback(() => {
     if (!lastStudied) return;
-    setAppView("feed");
-    const tab = lastStudied.tab as TabKey;
-    setActiveTab(tab);
-    setPickerStates((prev) => {
-      const updated = { ...prev, [tab]: lastStudied.pickerState };
-      savePickerStates(updated);
-      return updated;
-    });
+    setActiveTab("foryou");
     handleSelect(
       lastStudied.slug,
       lastStudied.ref,
@@ -795,8 +972,7 @@ export default function HomePage() {
 
   const hasTweets = tweets.length > 0;
   const showFeed = hasTweets;
-  const showEmpty =
-    !isLoading && !hasTweets && activeTab !== "foryou" && !error;
+  const showEmpty = false; // Source pickers removed; feed always loads via For You
   const showSkeletons = isLoading && !hasTweets;
   const imagesLoading = tweets.some((t) => t.imageLoading);
   const imagesTotal = tweets.filter((t) => t.needsImage).length;
@@ -805,28 +981,22 @@ export default function HomePage() {
   ).length;
   const activeTabIndex = tabs.findIndex((t) => t.key === activeTab);
 
-  const sidebarNavItems: { key: TabKey | "learning" | "bookmarks"; label: string; icon: typeof Home }[] = [
+  const sidebarNavItems: { key: string; label: string; icon: typeof Home }[] = [
     { key: "foryou", label: "For You", icon: Home },
-    { key: "mishnayos", label: "Mishnayos", icon: ScrollText },
-    { key: "gemara", label: "Gemara", icon: BookText },
-    { key: "chumash", label: "Tanakh", icon: Hash },
-    { key: "learning", label: "My Learning", icon: BookOpen },
+    { key: "search", label: "Search", icon: Compass },
+    { key: "myscrolls", label: "My Scrolls", icon: ScrollText },
     { key: "bookmarks", label: "Bookmarks", icon: Bookmark },
   ];
 
   const handleSidebarNav = useCallback((key: string) => {
-    if (key === "learning") {
-      setAppView("learning");
-    } else if (key === "bookmarks") {
-      setAppView("feed");
+    if (key === "bookmarks") {
       setShowBookmarks(true);
     } else {
-      setAppView("feed");
       handleTabChange(key as TabKey);
     }
   }, [handleTabChange]);
 
-  const activeSidebarKey = appView === "learning" ? "learning" : activeTab;
+  const activeSidebarKey = activeTab;
 
   return (
     <div className="min-h-screen bg-[var(--bg)] pb-16 sm:pb-0 sm:flex sm:justify-center">
@@ -838,7 +1008,7 @@ export default function HomePage() {
             className="text-xl font-bold text-[var(--text)]"
             style={{ fontFamily: "var(--font-display)" }}
           >
-            MishnahFeed
+            Scroll
           </h1>
         </div>
 
@@ -863,6 +1033,17 @@ export default function HomePage() {
           })}
         </nav>
 
+        {/* Create scroll button */}
+        <div className="px-3 mt-4">
+          <a
+            href="/create"
+            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-full bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white font-semibold text-sm transition-colors"
+          >
+            <Plus className="w-4 h-4" />
+            New Scroll
+          </a>
+        </div>
+
         {/* User section at bottom */}
         <div className="px-3 pb-4 mt-auto">
           {!user ? (
@@ -875,7 +1056,7 @@ export default function HomePage() {
             </button>
           ) : (
             <button
-              onClick={() => handleSidebarNav("learning")}
+              onClick={() => handleSidebarNav("library")}
               className="w-full flex items-center gap-3 px-3 py-2.5 rounded-full hover:bg-[var(--bg)] transition-colors cursor-pointer"
             >
               <div className="w-8 h-8 rounded-full bg-[var(--accent)] flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
@@ -889,119 +1070,109 @@ export default function HomePage() {
 
       {/* ─── MAIN CONTENT AREA ─── */}
       <div className="sm:ml-[220px] lg:ml-[260px] sm:max-w-[600px] w-full">
-      {/* ─── FEED VIEW ─── */}
-      {appView === "feed" && (
-        <>
-          {/* Header */}
-          <div className="sticky top-0 z-10 bg-[var(--card-bg)]/95 backdrop-blur-md border-b border-[var(--border)] no-print">
-            {/* Mobile header */}
-            <div className="sm:hidden px-4 pt-3 pb-1 flex items-center justify-between">
-              <h1
-                className="text-lg font-semibold text-[var(--text)]"
-                style={{ fontFamily: "var(--font-display)" }}
-              >
-                MishnahFeed
-              </h1>
+        {/* Header */}
+        <div className="sticky top-0 z-10 bg-[var(--card-bg)]/95 backdrop-blur-md border-b border-[var(--border)] no-print">
+          {/* Mobile header */}
+          <div className="sm:hidden px-4 pt-3 pb-1 flex items-center justify-between">
+            <h1
+              className="text-lg font-semibold text-[var(--text)]"
+              style={{ fontFamily: "var(--font-display)" }}
+            >
+              Scroll
+            </h1>
 
-              <div className="flex gap-0.5">
+            <div className="flex gap-0.5">
+              <button
+                onClick={() => setShowBookmarks(true)}
+                className="w-8 h-8 rounded-full hover:bg-[var(--bg)] flex items-center justify-center transition-colors cursor-pointer"
+                title="Bookmarks"
+              >
+                <Bookmark className="w-4 h-4 text-[var(--muted)]" />
+              </button>
+              {!user ? (
                 <button
-                  onClick={() => setShowBookmarks(true)}
+                  onClick={() => setShowAuth(true)}
                   className="w-8 h-8 rounded-full hover:bg-[var(--bg)] flex items-center justify-center transition-colors cursor-pointer"
-                  title="Bookmarks"
+                  title="Sign In"
                 >
-                  <Bookmark className="w-4 h-4 text-[var(--muted)]" />
+                  <User className="w-4 h-4 text-[var(--muted)]" />
                 </button>
-                {!user ? (
-                  <button
-                    onClick={() => setShowAuth(true)}
-                    className="w-8 h-8 rounded-full hover:bg-[var(--bg)] flex items-center justify-center transition-colors cursor-pointer"
-                    title="Sign In"
-                  >
-                    <User className="w-4 h-4 text-[var(--muted)]" />
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => setAppView("learning")}
-                    className="w-8 h-8 rounded-full bg-[var(--accent)] flex items-center justify-center text-white text-xs font-bold cursor-pointer"
-                    title={user.email || "Profile"}
-                  >
-                    {(user.email || "U")[0].toUpperCase()}
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* Desktop header - simpler, just shows active tab name + actions */}
-            <div className="hidden sm:flex px-4 pt-3 pb-2 items-center justify-between">
-              <h2
-                className="text-lg font-bold text-[var(--text)]"
-                style={{ fontFamily: "var(--font-display)" }}
-              >
-                {tabs.find(t => t.key === activeTab)?.label || "Feed"}
-              </h2>
-              <div className="flex gap-0.5">
-                {activeTab === "foryou" && (
-                  <button
-                    onClick={loadDiscoverFeed}
-                    disabled={isLoading}
-                    className="w-8 h-8 rounded-full hover:bg-[var(--bg)] flex items-center justify-center transition-colors cursor-pointer disabled:opacity-40"
-                    title="Refresh feed"
-                  >
-                    <RefreshCw
-                      className={`w-4 h-4 text-[var(--muted)] ${isLoading ? "animate-spin" : ""}`}
-                    />
-                  </button>
-                )}
-                {showFeed && !isLoading && (
-                  <button
-                    onClick={handleShare}
-                    disabled={isSharing}
-                    className="w-8 h-8 rounded-full hover:bg-[var(--bg)] flex items-center justify-center transition-colors cursor-pointer disabled:opacity-40"
-                    title="Share"
-                  >
-                    <Share2 className="w-4 h-4 text-[var(--muted)]" />
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* Tab row - mobile only */}
-            <div className="sm:hidden relative">
-              <div className="flex">
-                {tabs.map((tab) => (
-                  <button
-                    key={tab.key}
-                    onClick={() => handleTabChange(tab.key)}
-                    className={`flex-1 py-3 text-sm font-semibold transition-colors cursor-pointer relative ${
-                      activeTab === tab.key
-                        ? "text-[var(--text)]"
-                        : "text-[var(--muted)] hover:text-[var(--text)]"
-                    }`}
-                  >
-                    {tab.label}
-                  </button>
-                ))}
-              </div>
-              <div
-                className="absolute bottom-0 h-[3px] rounded-full bg-[var(--accent)] transition-all duration-300 ease-out"
-                style={{
-                  width: `${100 / tabs.length}%`,
-                  left: `${(activeTabIndex * 100) / tabs.length}%`,
-                }}
-              />
+              ) : (
+                <button
+                  onClick={() => handleTabChange("myscrolls")}
+                  className="w-8 h-8 rounded-full bg-[var(--accent)] flex items-center justify-center text-white text-xs font-bold cursor-pointer"
+                  title={user.email || "Profile"}
+                >
+                  {(user.email || "U")[0].toUpperCase()}
+                </button>
+              )}
             </div>
           </div>
 
-          {/* Inline picker for source tabs */}
-          {activeTab !== "foryou" && (
-            <InlinePicker
-              sourceType={activeTab as SourceType}
-              onSelect={handleSelect}
-              isLoading={isLoading}
-              state={pickerStates[activeTab] || defaultPickerState}
-              onStateChange={handlePickerStateChange}
+          {/* Desktop header */}
+          <div className="hidden sm:flex px-4 pt-3 pb-3 items-center justify-between">
+            <h2
+              className="text-lg font-bold text-[var(--text)]"
+              style={{ fontFamily: "var(--font-display)" }}
+            >
+              {tabs.find(t => t.key === activeTab)?.label || "Feed"}
+            </h2>
+            <div className="flex gap-0.5">
+              {activeTab === "foryou" && (
+                <button
+                  onClick={loadDiscoverFeed}
+                  disabled={isLoading}
+                  className="w-8 h-8 rounded-full hover:bg-[var(--bg)] flex items-center justify-center transition-colors cursor-pointer disabled:opacity-40"
+                  title="Refresh feed"
+                >
+                  <RefreshCw
+                    className={`w-4 h-4 text-[var(--muted)] ${isLoading ? "animate-spin" : ""}`}
+                  />
+                </button>
+              )}
+              {activeTab === "foryou" && showFeed && !isLoading && (
+                <button
+                  onClick={handleShare}
+                  disabled={isSharing}
+                  className="w-8 h-8 rounded-full hover:bg-[var(--bg)] flex items-center justify-center transition-colors cursor-pointer disabled:opacity-40"
+                  title="Share"
+                >
+                  <Share2 className="w-4 h-4 text-[var(--muted)]" />
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Tab row - mobile only */}
+          <div className="sm:hidden relative">
+            <div className="flex">
+              {tabs.map((tab) => (
+                <button
+                  key={tab.key}
+                  onClick={() => handleTabChange(tab.key)}
+                  className={`flex-1 py-3 text-sm font-semibold transition-colors cursor-pointer relative ${
+                    activeTab === tab.key
+                      ? "text-[var(--text)]"
+                      : "text-[var(--muted)] hover:text-[var(--text)]"
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+            <div
+              className="absolute bottom-0 h-[3px] rounded-full bg-[var(--accent)] transition-all duration-300 ease-out"
+              style={{
+                width: `${100 / tabs.length}%`,
+                left: `${(activeTabIndex * 100) / tabs.length}%`,
+              }}
             />
-          )}
+          </div>
+        </div>
+
+      {/* ─── FOR YOU FEED ─── */}
+      {activeTab === "foryou" && (
+        <>
 
           {/* Usage bar removed — no rate limiting */}
 
@@ -1053,7 +1224,7 @@ export default function HomePage() {
           {/* Error */}
           {error && (
             <div className="max-w-2xl mx-auto mt-4 px-4 no-print">
-              <div className="bg-red-50 border border-red-200 rounded-2xl px-4 py-3 text-sm text-red-600 font-medium">
+              <div className="rounded-2xl border px-4 py-3 text-sm font-medium" style={{ backgroundColor: "var(--comm-4-bg)", borderColor: "var(--comm-4-border)", color: "var(--comm-4-text)" }}>
                 {error}
               </div>
             </div>
@@ -1162,32 +1333,16 @@ export default function HomePage() {
         </>
       )}
 
-      {/* ─── MY LEARNING VIEW ─── */}
-      {appView === "learning" && (
-        <div>
-          <div className="sticky top-0 z-10 bg-[var(--card-bg)]/95 backdrop-blur-md border-b border-[var(--border)] no-print">
-            <div className="px-4 py-3 flex items-center justify-between">
-              <h1
-                className="text-lg font-semibold text-[var(--text)]"
-                style={{ fontFamily: "var(--font-display)" }}
-              >
-                My Learning
-              </h1>
-              <button
-                onClick={() => setAppView("feed")}
-                className="sm:hidden text-sm text-[var(--accent)] font-medium hover:underline cursor-pointer"
-              >
-                Back to Feed
-              </button>
-            </div>
-          </div>
-          <MyLearningView onShowAuth={() => setShowAuth(true)} />
-        </div>
+      {/* ─── SEARCH VIEW ─── */}
+      {activeTab === "search" && (
+        <ExploreInline />
+      )}
+
+      {/* ─── MY SCROLLS VIEW ─── */}
+      {activeTab === "myscrolls" && (
+        <LibraryInline user={user} onShowAuth={() => setShowAuth(true)} />
       )}
       </div>{/* end main content area */}
-
-      {/* Bottom navigation (mobile) */}
-      <BottomNav activeView={appView} onNavigate={setAppView} />
 
       {/* Commentary page */}
       {selectedTweet && (

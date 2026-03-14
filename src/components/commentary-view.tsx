@@ -48,12 +48,12 @@ export function CommentaryView({ tweet, onBack }: Props) {
   }, [tweet.text, tweet.ref, tweet.slug, tweet.sourceRef]);
 
   const colors = [
-    { bg: "bg-amber-50", border: "border-amber-200", text: "text-amber-700" },
-    { bg: "bg-emerald-50", border: "border-emerald-200", text: "text-emerald-700" },
-    { bg: "bg-sky-50", border: "border-sky-200", text: "text-sky-700" },
-    { bg: "bg-rose-50", border: "border-rose-200", text: "text-rose-700" },
-    { bg: "bg-violet-50", border: "border-violet-200", text: "text-violet-700" },
-    { bg: "bg-teal-50", border: "border-teal-200", text: "text-teal-700" },
+    { bg: "var(--comm-1-bg)", border: "var(--comm-1-border)", text: "var(--comm-1-text)" },
+    { bg: "var(--comm-2-bg)", border: "var(--comm-2-border)", text: "var(--comm-2-text)" },
+    { bg: "var(--comm-3-bg)", border: "var(--comm-3-border)", text: "var(--comm-3-text)" },
+    { bg: "var(--comm-4-bg)", border: "var(--comm-4-border)", text: "var(--comm-4-text)" },
+    { bg: "var(--comm-5-bg)", border: "var(--comm-5-border)", text: "var(--comm-5-text)" },
+    { bg: "var(--comm-6-bg)", border: "var(--comm-6-border)", text: "var(--comm-6-text)" },
   ];
 
   return (
@@ -168,17 +168,26 @@ export function CommentaryView({ tweet, onBack }: Props) {
               return (
                 <div
                   key={ct.id}
-                  className="bg-[var(--card-bg)] rounded-xl border border-[var(--border)] p-4 fade-in"
-                  style={{ animationDelay: `${i * 80}ms` }}
+                  className="rounded-xl border p-4 fade-in"
+                  style={{
+                    animationDelay: `${i * 80}ms`,
+                    backgroundColor: color.bg,
+                    borderColor: color.border,
+                  }}
                 >
                   <div className="flex items-start gap-3">
                     <div
-                      className={`w-9 h-9 rounded-full ${color.bg} border ${color.border} flex items-center justify-center ${color.text} font-bold text-sm flex-shrink-0`}
+                      className="w-9 h-9 rounded-full border flex items-center justify-center font-bold text-sm flex-shrink-0"
+                      style={{
+                        backgroundColor: color.bg,
+                        borderColor: color.border,
+                        color: color.text,
+                      }}
                     >
                       {ct.commentator.charAt(0)}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <span className={`font-bold text-sm ${color.text}`}>
+                      <span className="font-bold text-sm" style={{ color: color.text }}>
                         {ct.commentator}
                       </span>
                       <p className="text-[14px] leading-[1.65] text-[var(--text)] mt-1">

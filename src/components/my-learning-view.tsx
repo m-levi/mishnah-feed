@@ -108,7 +108,7 @@ export function MyLearningView({
   if (!user) {
     let localRecords: { slug: string; ref: string; sourceType: string; displayName: string; timestamp: number }[] = [];
     try {
-      const saved = localStorage.getItem("mishnah-feed-local-progress");
+      const saved = localStorage.getItem("scroll-local-progress");
       if (saved) localRecords = JSON.parse(saved);
     } catch {}
 
