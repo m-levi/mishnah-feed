@@ -178,6 +178,25 @@ button {
   user-select: none;
 }
 
+/* 3D Book hover */
+.book-3d {
+  position: relative;
+  transform-style: preserve-3d;
+  transition: transform 0.3s ease;
+  flex-shrink: 0;
+}
+
+.book-3d:hover {
+  transform: scale(1.05);
+}
+
+.book-3d:hover .book-cover {
+  transform: rotateY(-18deg) !important;
+  box-shadow:
+    4px 4px 10px rgba(0,0,0,0.35),
+    inset -1px 0 1px rgba(255,255,255,0.1) !important;
+}
+
 /* Hide scrollbar utility (for horizontal pill scrollers) */
 .no-scrollbar {
   -ms-overflow-style: none;
