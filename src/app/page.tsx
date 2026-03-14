@@ -1073,34 +1073,56 @@ export default function HomePage() {
         {/* Header */}
         <div className="sticky top-0 z-10 bg-[var(--card-bg)]/95 backdrop-blur-md border-b border-[var(--border)] no-print">
           {/* Mobile header */}
-          <div className="sm:hidden px-4 pt-3 pb-1 flex items-center justify-between">
+          <div className="sm:hidden px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-1 flex items-center justify-between">
             <h1
-              className="text-lg font-semibold text-[var(--text)]"
+              className="text-xl font-bold text-[var(--accent)]"
               style={{ fontFamily: "var(--font-display)" }}
             >
               Scroll
             </h1>
 
-            <div className="flex gap-0.5">
+            <div className="flex items-center gap-1">
+              {activeTab === "foryou" && (
+                <button
+                  onClick={loadDiscoverFeed}
+                  disabled={isLoading}
+                  className="w-9 h-9 rounded-full hover:bg-[var(--bg)] active:bg-[var(--border)] flex items-center justify-center transition-colors cursor-pointer disabled:opacity-40"
+                  title="Refresh feed"
+                >
+                  <RefreshCw
+                    className={`w-[18px] h-[18px] text-[var(--muted)] ${isLoading ? "animate-spin" : ""}`}
+                  />
+                </button>
+              )}
+              {activeTab === "foryou" && showFeed && !isLoading && (
+                <button
+                  onClick={handleShare}
+                  disabled={isSharing}
+                  className="w-9 h-9 rounded-full hover:bg-[var(--bg)] active:bg-[var(--border)] flex items-center justify-center transition-colors cursor-pointer disabled:opacity-40"
+                  title="Share"
+                >
+                  <Share2 className="w-[18px] h-[18px] text-[var(--muted)]" />
+                </button>
+              )}
               <button
                 onClick={() => setShowBookmarks(true)}
-                className="w-8 h-8 rounded-full hover:bg-[var(--bg)] flex items-center justify-center transition-colors cursor-pointer"
+                className="w-9 h-9 rounded-full hover:bg-[var(--bg)] active:bg-[var(--border)] flex items-center justify-center transition-colors cursor-pointer"
                 title="Bookmarks"
               >
-                <Bookmark className="w-4 h-4 text-[var(--muted)]" />
+                <Bookmark className="w-[18px] h-[18px] text-[var(--muted)]" />
               </button>
               {!user ? (
                 <button
                   onClick={() => setShowAuth(true)}
-                  className="w-8 h-8 rounded-full hover:bg-[var(--bg)] flex items-center justify-center transition-colors cursor-pointer"
+                  className="w-9 h-9 rounded-full hover:bg-[var(--bg)] active:bg-[var(--border)] flex items-center justify-center transition-colors cursor-pointer"
                   title="Sign In"
                 >
-                  <User className="w-4 h-4 text-[var(--muted)]" />
+                  <User className="w-[18px] h-[18px] text-[var(--muted)]" />
                 </button>
               ) : (
                 <button
                   onClick={() => handleTabChange("myscrolls")}
-                  className="w-8 h-8 rounded-full bg-[var(--accent)] flex items-center justify-center text-white text-xs font-bold cursor-pointer"
+                  className="w-9 h-9 rounded-full bg-[var(--accent)] flex items-center justify-center text-white text-xs font-bold cursor-pointer active:scale-95 transition-transform"
                   title={user.email || "Profile"}
                 >
                   {(user.email || "U")[0].toUpperCase()}
@@ -1346,7 +1368,7 @@ export default function HomePage() {
 
       {/* Commentary page */}
       {selectedTweet && (
-        <div className="fixed inset-0 z-50 bg-[var(--bg)]">
+        <div className="fixed inset-0 z-50 bg-[var(--bg)] overflow-y-auto overscroll-contain">
           <CommentaryView
             tweet={selectedTweet}
             onBack={() => setSelectedTweet(null)}
