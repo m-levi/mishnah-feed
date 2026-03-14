@@ -202,11 +202,11 @@ export default function ScrollViewPage() {
   return (
     <div className="min-h-screen bg-[var(--bg)]">
       {/* Header */}
-      <div className="sticky top-0 z-10 bg-[var(--card-bg)]/95 backdrop-blur-md border-b border-[var(--border)]">
-        <div className="max-w-lg mx-auto px-4 py-3 flex items-center gap-3">
+      <div className="sticky top-0 z-10 bg-[var(--card-bg)]/95 backdrop-blur-xl border-b border-[var(--border)]">
+        <div className="max-w-lg mx-auto px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-3 flex items-center gap-3">
           <button
             onClick={() => router.back()}
-            className="w-8 h-8 rounded-full hover:bg-[var(--bg)] flex items-center justify-center transition-colors cursor-pointer"
+            className="w-9 h-9 rounded-full hover:bg-[var(--bg)] active:bg-[var(--border)] flex items-center justify-center transition-colors cursor-pointer"
           >
             <ArrowLeft className="w-5 h-5 text-[var(--text)]" />
           </button>

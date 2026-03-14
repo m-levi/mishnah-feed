@@ -20,7 +20,7 @@ export function ScrollCard({ scroll, onClick, showFollowers = true }: ScrollCard
   return (
     <button
       onClick={onClick}
-      className="w-full flex items-center gap-3 p-3.5 bg-[var(--card-bg)] rounded-xl border border-[var(--border)] hover:border-[var(--accent)]/50 hover:shadow-sm transition-all cursor-pointer text-left"
+      className="w-full flex items-center gap-3 p-3.5 bg-[var(--card-bg)] rounded-xl border border-[var(--border)] hover:border-[var(--accent)]/50 hover:shadow-sm active:scale-[0.98] active:bg-[var(--bg)] transition-all duration-150 cursor-pointer text-left"
     >
       <div className="w-11 h-11 rounded-xl bg-[var(--accent-light)] flex items-center justify-center text-xl flex-shrink-0">
         {scroll.cover_emoji || "\uD83D\uDCDC"}
