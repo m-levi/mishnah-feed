@@ -10,32 +10,26 @@ import {
   ChevronRight,
   User,
   Home,
-  Hash,
   ScrollText,
-  BookText,
   Compass,
   Plus,
 } from "lucide-react";
-import { InlinePicker } from "@/components/mishnah-selector";
 import { StormCard } from "@/components/storm-card";
 import { TweetSkeleton } from "@/components/tweet-skeleton";
 import { CommentaryView } from "@/components/commentary-view";
 import { BookmarksSheet } from "@/components/bookmarks-sheet";
-import { BottomNav, type AppView } from "@/components/bottom-nav";
-import { MyLearningView } from "@/components/my-learning-view";
 import { AuthModal } from "@/components/auth-modal";
 import { useAuth } from "@/lib/auth-context";
 import { supabase } from "@/lib/supabase";
 import { getItemFromState, getNextRef } from "@/lib/source-data";
 import type { StormTweet, SourceType, PickerState } from "@/lib/types";
 
-type TabKey = "foryou" | "mishnayos" | "gemara" | "chumash";
+type TabKey = "foryou" | "myscrolls" | "search";
 
 const tabs: { key: TabKey; label: string }[] = [
   { key: "foryou", label: "For You" },
-  { key: "mishnayos", label: "Mishnayos" },
-  { key: "gemara", label: "Gemara" },
-  { key: "chumash", label: "Tanakh" },
+  { key: "myscrolls", label: "My Scrolls" },
+  { key: "search", label: "Search" },
 ];
 
 const defaultPickerState: PickerState = {
@@ -188,35 +182,28 @@ function ExploreInline() {
 
   return (
     <div>
-      <div className="sticky top-0 z-10 bg-[var(--card-bg)]/95 backdrop-blur-md border-b border-[var(--border)] no-print">
-        <div className="px-4 py-3">
-          <div className="sm:hidden flex items-center justify-between mb-3">
-            <h1 className="text-lg font-semibold text-[var(--text)]" style={{ fontFamily: "var(--font-display)" }}>
-              Explore
-            </h1>
-          </div>
-          <div className="relative">
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search scrolls..."
-              className="w-full pl-4 pr-4 py-2.5 rounded-xl border border-[var(--border)] bg-[var(--bg)] text-sm text-[var(--text)] placeholder:text-[var(--muted)] focus:outline-none focus:border-[var(--accent)]"
-            />
-          </div>
-          <div className="flex gap-1 mt-3 overflow-x-auto">
-            {cats.map((c) => (
-              <button
-                key={c.key}
-                onClick={() => setCategory(c.key)}
-                className={`px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap cursor-pointer transition-all ${
-                  category === c.key ? "bg-[var(--accent)] text-white" : "bg-[var(--bg)] text-[var(--muted)]"
-                }`}
-              >
-                {c.label}
-              </button>
-            ))}
-          </div>
+      <div className="px-4 py-3 border-b border-[var(--border)]">
+        <div className="relative">
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search scrolls..."
+            className="w-full pl-4 pr-4 py-2.5 rounded-xl border border-[var(--border)] bg-[var(--bg)] text-sm text-[var(--text)] placeholder:text-[var(--muted)] focus:outline-none focus:border-[var(--accent)]"
+          />
+        </div>
+        <div className="flex gap-1 mt-3 overflow-x-auto">
+          {cats.map((c) => (
+            <button
+              key={c.key}
+              onClick={() => setCategory(c.key)}
+              className={`px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap cursor-pointer transition-all ${
+                category === c.key ? "bg-[var(--accent)] text-white" : "bg-[var(--bg)] text-[var(--muted)]"
+              }`}
+            >
+              {c.label}
+            </button>
+          ))}
         </div>
       </div>
       <div className="px-4 py-4 pb-24">
@@ -287,16 +274,6 @@ function LibraryInline({ user, onShowAuth }: { user: { id: string; email?: strin
 
   return (
     <div>
-      <div className="sticky top-0 z-10 bg-[var(--card-bg)]/95 backdrop-blur-md border-b border-[var(--border)] no-print">
-        <div className="px-4 py-3 flex items-center justify-between">
-          <h1 className="text-lg font-semibold text-[var(--text)]" style={{ fontFamily: "var(--font-display)" }}>My Scrolls</h1>
-          {user && (
-            <a href="/create" className="w-8 h-8 rounded-full bg-[var(--accent)] flex items-center justify-center text-white cursor-pointer hover:bg-[var(--accent-hover)] transition-colors">
-              <Plus className="w-4 h-4" />
-            </a>
-          )}
-        </div>
-      </div>
       <div className="px-4 py-4 pb-24">
         {!user ? (
           <div className="flex flex-col items-center text-center py-12">
@@ -363,7 +340,6 @@ function LibraryInline({ user, onShowAuth }: { user: { id: string; email?: strin
 export default function HomePage() {
   const { user, checkUsageLimit, incrementUsage } = useAuth();
 
-  const [appView, setAppView] = useState<AppView>("feed");
   const [activeTab, setActiveTab] = useState<TabKey>("foryou");
   const [tweets, setTweets] = useState<StormTweet[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -548,9 +524,10 @@ export default function HomePage() {
 
       abortActiveStream();
 
-      if (tweets.length > 0) {
-        feedCacheRef.current[activeTab] = {
-          ...feedCacheRef.current[activeTab],
+      // Cache current feed state if leaving the feed tab
+      if (activeTab === "foryou" && tweets.length > 0) {
+        feedCacheRef.current["foryou"] = {
+          ...feedCacheRef.current["foryou"],
           tweets: [...tweets],
           selection: currentSelection,
         };
@@ -564,25 +541,24 @@ export default function HomePage() {
       setLoadingMore(false);
       setReachedEnd(false);
 
-      const cached = feedCacheRef.current[tab];
-      if (cached && cached.tweets.length > 0) {
-        setTweets(cached.tweets);
-        setCurrentSelection(cached.selection);
-        if (cached.slug && cached.ref && cached.sourceType) {
-          currentFeedCtx.current = {
-            slug: cached.slug,
-            ref: cached.ref,
-            sourceType: cached.sourceType,
-          };
+      // Restore feed cache when switching back to For You
+      if (tab === "foryou") {
+        const cached = feedCacheRef.current["foryou"];
+        if (cached && cached.tweets.length > 0) {
+          setTweets(cached.tweets);
+          setCurrentSelection(cached.selection);
+          if (cached.slug && cached.ref && cached.sourceType) {
+            currentFeedCtx.current = {
+              slug: cached.slug,
+              ref: cached.ref,
+              sourceType: cached.sourceType,
+            };
+          } else {
+            currentFeedCtx.current = null;
+          }
         } else {
-          currentFeedCtx.current = null;
+          loadDiscoverFeed();
         }
-      } else if (tab === "foryou") {
-        loadDiscoverFeed();
-      } else {
-        setTweets([]);
-        setCurrentSelection("");
-        currentFeedCtx.current = null;
       }
     },
     [activeTab, tweets, currentSelection, abortActiveStream, loadDiscoverFeed]
@@ -985,14 +961,7 @@ export default function HomePage() {
 
   const handleContinueLearning = useCallback(() => {
     if (!lastStudied) return;
-    setAppView("feed");
-    const tab = lastStudied.tab as TabKey;
-    setActiveTab(tab);
-    setPickerStates((prev) => {
-      const updated = { ...prev, [tab]: lastStudied.pickerState };
-      savePickerStates(updated);
-      return updated;
-    });
+    setActiveTab("foryou");
     handleSelect(
       lastStudied.slug,
       lastStudied.ref,
@@ -1003,8 +972,7 @@ export default function HomePage() {
 
   const hasTweets = tweets.length > 0;
   const showFeed = hasTweets;
-  const showEmpty =
-    !isLoading && !hasTweets && activeTab !== "foryou" && !error;
+  const showEmpty = false; // Source pickers removed; feed always loads via For You
   const showSkeletons = isLoading && !hasTweets;
   const imagesLoading = tweets.some((t) => t.imageLoading);
   const imagesTotal = tweets.filter((t) => t.needsImage).length;
@@ -1015,29 +983,20 @@ export default function HomePage() {
 
   const sidebarNavItems: { key: string; label: string; icon: typeof Home }[] = [
     { key: "foryou", label: "For You", icon: Home },
-    { key: "explore", label: "Explore Scrolls", icon: Compass },
-    { key: "library", label: "My Scrolls", icon: ScrollText },
-    { key: "mishnayos", label: "Mishnayos", icon: BookText },
-    { key: "gemara", label: "Gemara", icon: BookText },
-    { key: "chumash", label: "Tanakh", icon: Hash },
+    { key: "search", label: "Search", icon: Compass },
+    { key: "myscrolls", label: "My Scrolls", icon: ScrollText },
     { key: "bookmarks", label: "Bookmarks", icon: Bookmark },
   ];
 
   const handleSidebarNav = useCallback((key: string) => {
-    if (key === "explore") {
-      setAppView("explore");
-    } else if (key === "library") {
-      setAppView("library");
-    } else if (key === "bookmarks") {
-      setAppView("feed");
+    if (key === "bookmarks") {
       setShowBookmarks(true);
     } else {
-      setAppView("feed");
       handleTabChange(key as TabKey);
     }
   }, [handleTabChange]);
 
-  const activeSidebarKey = appView === "explore" ? "explore" : appView === "library" ? "library" : activeTab;
+  const activeSidebarKey = activeTab;
 
   return (
     <div className="min-h-screen bg-[var(--bg)] pb-16 sm:pb-0 sm:flex sm:justify-center">
@@ -1111,119 +1070,109 @@ export default function HomePage() {
 
       {/* ─── MAIN CONTENT AREA ─── */}
       <div className="sm:ml-[220px] lg:ml-[260px] sm:max-w-[600px] w-full">
-      {/* ─── FEED VIEW ─── */}
-      {appView === "feed" && (
-        <>
-          {/* Header */}
-          <div className="sticky top-0 z-10 bg-[var(--card-bg)]/95 backdrop-blur-md border-b border-[var(--border)] no-print">
-            {/* Mobile header */}
-            <div className="sm:hidden px-4 pt-3 pb-1 flex items-center justify-between">
-              <h1
-                className="text-lg font-semibold text-[var(--text)]"
-                style={{ fontFamily: "var(--font-display)" }}
-              >
-                Scroll
-              </h1>
+        {/* Header */}
+        <div className="sticky top-0 z-10 bg-[var(--card-bg)]/95 backdrop-blur-md border-b border-[var(--border)] no-print">
+          {/* Mobile header */}
+          <div className="sm:hidden px-4 pt-3 pb-1 flex items-center justify-between">
+            <h1
+              className="text-lg font-semibold text-[var(--text)]"
+              style={{ fontFamily: "var(--font-display)" }}
+            >
+              Scroll
+            </h1>
 
-              <div className="flex gap-0.5">
+            <div className="flex gap-0.5">
+              <button
+                onClick={() => setShowBookmarks(true)}
+                className="w-8 h-8 rounded-full hover:bg-[var(--bg)] flex items-center justify-center transition-colors cursor-pointer"
+                title="Bookmarks"
+              >
+                <Bookmark className="w-4 h-4 text-[var(--muted)]" />
+              </button>
+              {!user ? (
                 <button
-                  onClick={() => setShowBookmarks(true)}
+                  onClick={() => setShowAuth(true)}
                   className="w-8 h-8 rounded-full hover:bg-[var(--bg)] flex items-center justify-center transition-colors cursor-pointer"
-                  title="Bookmarks"
+                  title="Sign In"
                 >
-                  <Bookmark className="w-4 h-4 text-[var(--muted)]" />
+                  <User className="w-4 h-4 text-[var(--muted)]" />
                 </button>
-                {!user ? (
-                  <button
-                    onClick={() => setShowAuth(true)}
-                    className="w-8 h-8 rounded-full hover:bg-[var(--bg)] flex items-center justify-center transition-colors cursor-pointer"
-                    title="Sign In"
-                  >
-                    <User className="w-4 h-4 text-[var(--muted)]" />
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => setAppView("library")}
-                    className="w-8 h-8 rounded-full bg-[var(--accent)] flex items-center justify-center text-white text-xs font-bold cursor-pointer"
-                    title={user.email || "Profile"}
-                  >
-                    {(user.email || "U")[0].toUpperCase()}
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* Desktop header - simpler, just shows active tab name + actions */}
-            <div className="hidden sm:flex px-4 pt-3 pb-2 items-center justify-between">
-              <h2
-                className="text-lg font-bold text-[var(--text)]"
-                style={{ fontFamily: "var(--font-display)" }}
-              >
-                {tabs.find(t => t.key === activeTab)?.label || "Feed"}
-              </h2>
-              <div className="flex gap-0.5">
-                {activeTab === "foryou" && (
-                  <button
-                    onClick={loadDiscoverFeed}
-                    disabled={isLoading}
-                    className="w-8 h-8 rounded-full hover:bg-[var(--bg)] flex items-center justify-center transition-colors cursor-pointer disabled:opacity-40"
-                    title="Refresh feed"
-                  >
-                    <RefreshCw
-                      className={`w-4 h-4 text-[var(--muted)] ${isLoading ? "animate-spin" : ""}`}
-                    />
-                  </button>
-                )}
-                {showFeed && !isLoading && (
-                  <button
-                    onClick={handleShare}
-                    disabled={isSharing}
-                    className="w-8 h-8 rounded-full hover:bg-[var(--bg)] flex items-center justify-center transition-colors cursor-pointer disabled:opacity-40"
-                    title="Share"
-                  >
-                    <Share2 className="w-4 h-4 text-[var(--muted)]" />
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* Tab row - mobile only */}
-            <div className="sm:hidden relative">
-              <div className="flex">
-                {tabs.map((tab) => (
-                  <button
-                    key={tab.key}
-                    onClick={() => handleTabChange(tab.key)}
-                    className={`flex-1 py-3 text-sm font-semibold transition-colors cursor-pointer relative ${
-                      activeTab === tab.key
-                        ? "text-[var(--text)]"
-                        : "text-[var(--muted)] hover:text-[var(--text)]"
-                    }`}
-                  >
-                    {tab.label}
-                  </button>
-                ))}
-              </div>
-              <div
-                className="absolute bottom-0 h-[3px] rounded-full bg-[var(--accent)] transition-all duration-300 ease-out"
-                style={{
-                  width: `${100 / tabs.length}%`,
-                  left: `${(activeTabIndex * 100) / tabs.length}%`,
-                }}
-              />
+              ) : (
+                <button
+                  onClick={() => handleTabChange("myscrolls")}
+                  className="w-8 h-8 rounded-full bg-[var(--accent)] flex items-center justify-center text-white text-xs font-bold cursor-pointer"
+                  title={user.email || "Profile"}
+                >
+                  {(user.email || "U")[0].toUpperCase()}
+                </button>
+              )}
             </div>
           </div>
 
-          {/* Inline picker for source tabs */}
-          {activeTab !== "foryou" && (
-            <InlinePicker
-              sourceType={activeTab as SourceType}
-              onSelect={handleSelect}
-              isLoading={isLoading}
-              state={pickerStates[activeTab] || defaultPickerState}
-              onStateChange={handlePickerStateChange}
+          {/* Desktop header */}
+          <div className="hidden sm:flex px-4 pt-3 pb-3 items-center justify-between">
+            <h2
+              className="text-lg font-bold text-[var(--text)]"
+              style={{ fontFamily: "var(--font-display)" }}
+            >
+              {tabs.find(t => t.key === activeTab)?.label || "Feed"}
+            </h2>
+            <div className="flex gap-0.5">
+              {activeTab === "foryou" && (
+                <button
+                  onClick={loadDiscoverFeed}
+                  disabled={isLoading}
+                  className="w-8 h-8 rounded-full hover:bg-[var(--bg)] flex items-center justify-center transition-colors cursor-pointer disabled:opacity-40"
+                  title="Refresh feed"
+                >
+                  <RefreshCw
+                    className={`w-4 h-4 text-[var(--muted)] ${isLoading ? "animate-spin" : ""}`}
+                  />
+                </button>
+              )}
+              {activeTab === "foryou" && showFeed && !isLoading && (
+                <button
+                  onClick={handleShare}
+                  disabled={isSharing}
+                  className="w-8 h-8 rounded-full hover:bg-[var(--bg)] flex items-center justify-center transition-colors cursor-pointer disabled:opacity-40"
+                  title="Share"
+                >
+                  <Share2 className="w-4 h-4 text-[var(--muted)]" />
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Tab row - mobile only */}
+          <div className="sm:hidden relative">
+            <div className="flex">
+              {tabs.map((tab) => (
+                <button
+                  key={tab.key}
+                  onClick={() => handleTabChange(tab.key)}
+                  className={`flex-1 py-3 text-sm font-semibold transition-colors cursor-pointer relative ${
+                    activeTab === tab.key
+                      ? "text-[var(--text)]"
+                      : "text-[var(--muted)] hover:text-[var(--text)]"
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+            <div
+              className="absolute bottom-0 h-[3px] rounded-full bg-[var(--accent)] transition-all duration-300 ease-out"
+              style={{
+                width: `${100 / tabs.length}%`,
+                left: `${(activeTabIndex * 100) / tabs.length}%`,
+              }}
             />
-          )}
+          </div>
+        </div>
+
+      {/* ─── FOR YOU FEED ─── */}
+      {activeTab === "foryou" && (
+        <>
 
           {/* Usage bar removed — no rate limiting */}
 
@@ -1275,7 +1224,7 @@ export default function HomePage() {
           {/* Error */}
           {error && (
             <div className="max-w-2xl mx-auto mt-4 px-4 no-print">
-              <div className="bg-red-50 border border-red-200 rounded-2xl px-4 py-3 text-sm text-red-600 font-medium">
+              <div className="rounded-2xl border px-4 py-3 text-sm font-medium" style={{ backgroundColor: "var(--comm-4-bg)", borderColor: "var(--comm-4-border)", color: "var(--comm-4-text)" }}>
                 {error}
               </div>
             </div>
@@ -1384,29 +1333,16 @@ export default function HomePage() {
         </>
       )}
 
-      {/* ─── EXPLORE VIEW ─── */}
-      {appView === "explore" && (
+      {/* ─── SEARCH VIEW ─── */}
+      {activeTab === "search" && (
         <ExploreInline />
       )}
 
-      {/* ─── LIBRARY VIEW ─── */}
-      {appView === "library" && (
+      {/* ─── MY SCROLLS VIEW ─── */}
+      {activeTab === "myscrolls" && (
         <LibraryInline user={user} onShowAuth={() => setShowAuth(true)} />
       )}
       </div>{/* end main content area */}
-
-      {/* Bottom navigation (mobile) */}
-      <BottomNav activeView={appView} onNavigate={(view) => {
-        if (view === "profile") {
-          if (!user) {
-            setShowAuth(true);
-          } else {
-            setAppView("library");
-          }
-        } else {
-          setAppView(view);
-        }
-      }} />
 
       {/* Commentary page */}
       {selectedTweet && (
