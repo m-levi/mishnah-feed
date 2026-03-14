@@ -1,27 +1,27 @@
 "use client";
 
-import { Home, Compass, BookOpen, User } from "lucide-react";
+import { Home, Compass, ScrollText, Bookmark } from "lucide-react";
 
-export type AppView = "feed" | "explore" | "library" | "profile";
+export type BottomNavKey = "foryou" | "search" | "myscrolls" | "bookmarks";
 
 interface BottomNavProps {
-  activeView: AppView;
-  onNavigate: (view: AppView) => void;
+  activeTab: string;
+  onNavigate: (key: BottomNavKey) => void;
 }
 
-const items: { key: AppView; icon: typeof Home; label: string }[] = [
-  { key: "feed", icon: Home, label: "Feed" },
-  { key: "explore", icon: Compass, label: "Explore" },
-  { key: "library", icon: BookOpen, label: "Library" },
-  { key: "profile", icon: User, label: "Profile" },
+const items: { key: BottomNavKey; icon: typeof Home; label: string }[] = [
+  { key: "foryou", icon: Home, label: "For You" },
+  { key: "search", icon: Compass, label: "Search" },
+  { key: "myscrolls", icon: ScrollText, label: "My Scrolls" },
+  { key: "bookmarks", icon: Bookmark, label: "Bookmarks" },
 ];
 
-export function BottomNav({ activeView, onNavigate }: BottomNavProps) {
+export function BottomNav({ activeTab, onNavigate }: BottomNavProps) {
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 bg-[var(--card-bg)]/98 backdrop-blur-lg border-t border-[var(--border)] sm:hidden no-print">
       <div className="flex items-center justify-around h-[52px] max-w-lg mx-auto">
         {items.map(({ key, icon: Icon, label }) => {
-          const active = activeView === key;
+          const active = activeTab === key;
           return (
             <button
               key={key}
