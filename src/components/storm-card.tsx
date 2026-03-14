@@ -98,7 +98,7 @@ export function StormCard({ tweet, onTap }: StormCardProps) {
 
   return (
     <article
-      className={`bg-[var(--card-bg)] px-4 transition-colors hover:bg-[var(--bg)]/60 cursor-pointer ${
+      className={`bg-[var(--card-bg)] px-4 transition-colors duration-150 hover:bg-[var(--bg)]/60 active:bg-[var(--bg)]/80 cursor-pointer press-card ${
         isFirst && !isSingle ? "border-b-0" : "border-b border-[var(--border)]"
       } ${isMid ? "border-b-0" : ""}`}
       onClick={() => onTap?.(tweet)}
@@ -195,14 +195,14 @@ export function StormCard({ tweet, onTap }: StormCardProps) {
 
           {/* Action bar — only on last card (or single card) */}
           {(isLast || isSingle) && (
-            <div className="flex items-center justify-between mt-3 max-w-[280px]">
+            <div className="flex items-center justify-between mt-2 -ml-1.5 max-w-[300px]">
               <button
                 className="flex items-center gap-1 text-[var(--muted)] hover:text-[var(--accent)] transition-colors group cursor-pointer"
                 onClick={handleLearnMore}
                 title="View commentary"
               >
-                <div className="p-1.5 rounded-full group-hover:bg-[var(--accent)]/10 transition-colors">
-                  <MessageCircle className="w-4 h-4" />
+                <div className="p-2 rounded-full group-hover:bg-[var(--accent)]/10 group-active:bg-[var(--accent)]/15 transition-colors">
+                  <MessageCircle className="w-[18px] h-[18px]" />
                 </div>
               </button>
 
@@ -213,8 +213,8 @@ export function StormCard({ tweet, onTap }: StormCardProps) {
                 onClick={handleCopy}
                 title={copied ? "Copied!" : "Copy text"}
               >
-                <div className="p-1.5 rounded-full group-hover:bg-green-600/10 transition-colors">
-                  {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                <div className="p-2 rounded-full group-hover:bg-green-600/10 group-active:bg-green-600/15 transition-colors">
+                  {copied ? <Check className="w-[18px] h-[18px]" /> : <Copy className="w-[18px] h-[18px]" />}
                 </div>
               </button>
 
@@ -226,11 +226,11 @@ export function StormCard({ tweet, onTap }: StormCardProps) {
                 title={liked ? "Unfavorite" : "Favorite"}
               >
                 <div
-                  className={`p-1.5 rounded-full transition-colors ${
-                    liked ? "bg-pink-500/10" : "group-hover:bg-pink-500/10"
+                  className={`p-2 rounded-full transition-colors ${
+                    liked ? "bg-pink-500/10" : "group-hover:bg-pink-500/10 group-active:bg-pink-500/15"
                   } ${likeAnim ? "like-pop" : ""}`}
                 >
-                  <Heart className="w-4 h-4" fill={liked ? "currentColor" : "none"} />
+                  <Heart className="w-[18px] h-[18px]" fill={liked ? "currentColor" : "none"} />
                 </div>
               </button>
 
@@ -242,11 +242,11 @@ export function StormCard({ tweet, onTap }: StormCardProps) {
                 title={bookmarked ? "Remove bookmark" : "Bookmark"}
               >
                 <div
-                  className={`p-1.5 rounded-full transition-colors ${
-                    bookmarked ? "bg-[var(--accent)]/10" : "group-hover:bg-[var(--accent)]/10"
+                  className={`p-2 rounded-full transition-colors ${
+                    bookmarked ? "bg-[var(--accent)]/10" : "group-hover:bg-[var(--accent)]/10 group-active:bg-[var(--accent)]/15"
                   }`}
                 >
-                  <Bookmark className="w-4 h-4" fill={bookmarked ? "currentColor" : "none"} />
+                  <Bookmark className="w-[18px] h-[18px]" fill={bookmarked ? "currentColor" : "none"} />
                 </div>
               </button>
             </div>

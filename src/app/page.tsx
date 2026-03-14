@@ -194,13 +194,13 @@ function ExploreInline() {
             className="w-full pl-4 pr-4 py-2.5 rounded-xl border border-[var(--border)] bg-[var(--bg)] text-sm text-[var(--text)] placeholder:text-[var(--muted)] focus:outline-none focus:border-[var(--accent)]"
           />
         </div>
-        <div className="flex gap-1 mt-3 overflow-x-auto">
+        <div className="flex gap-1.5 mt-3 overflow-x-auto no-scrollbar -mx-4 px-4">
           {cats.map((c) => (
             <button
               key={c.key}
               onClick={() => setCategory(c.key)}
-              className={`px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap cursor-pointer transition-all ${
-                category === c.key ? "bg-[var(--accent)] text-white" : "bg-[var(--bg)] text-[var(--muted)]"
+              className={`px-3.5 py-2 rounded-full text-xs font-semibold whitespace-nowrap cursor-pointer transition-all duration-200 active:scale-95 ${
+                category === c.key ? "bg-[var(--accent)] text-white shadow-sm" : "bg-[var(--bg)] text-[var(--muted)] active:bg-[var(--border)]"
               }`}
             >
               {c.label}
@@ -1196,7 +1196,7 @@ export default function HomePage() {
       {/* ─── MAIN CONTENT AREA ─── */}
       <div className="sm:ml-[220px] lg:ml-[260px] sm:max-w-[600px] w-full">
         {/* Header */}
-        <div className="sticky top-0 z-10 bg-[var(--card-bg)]/95 backdrop-blur-md border-b border-[var(--border)] no-print">
+        <div className="sticky top-0 z-10 bg-[var(--card-bg)]/95 backdrop-blur-xl border-b border-[var(--border)] no-print">
           {/* Mobile header */}
           <div className="sm:hidden px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-1 flex items-center justify-between">
             <h1

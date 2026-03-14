@@ -82,18 +82,18 @@ export function LearnMoreModal({ tweet, onClose }: Props) {
       />
 
       {/* Sheet */}
-      <div className="relative w-full sm:max-w-lg max-h-[85vh] bg-[var(--card-bg)] rounded-t-2xl sm:rounded-2xl overflow-hidden modal-sheet z-10">
+      <div className="relative w-full sm:max-w-lg max-h-[85vh] bg-[var(--card-bg)] rounded-t-3xl sm:rounded-2xl overflow-hidden modal-sheet z-10">
         {/* Drag handle (mobile) */}
-        <div className="sm:hidden flex justify-center pt-3 pb-1">
-          <div className="w-10 h-1 rounded-full bg-[var(--border)]" />
+        <div className="sm:hidden flex justify-center pt-3 pb-2">
+          <div className="w-12 h-1.5 rounded-full bg-[var(--border)]" />
         </div>
 
         {/* Close button */}
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 w-8 h-8 rounded-full bg-[var(--bg)] flex items-center justify-center text-[var(--muted)] hover:text-[var(--text)] transition-colors cursor-pointer z-10"
+          className="absolute top-4 right-4 w-9 h-9 rounded-full bg-[var(--bg)] flex items-center justify-center text-[var(--muted)] hover:text-[var(--text)] active:bg-[var(--border)] transition-colors cursor-pointer z-10"
         >
-          <X className="w-4 h-4" />
+          <X className="w-4.5 h-4.5" />
         </button>
 
         {/* Scrollable content */}
