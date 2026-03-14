@@ -1,6 +1,6 @@
 import { ai, GEMINI_TEXT_MODEL } from "@/lib/gemini";
 import { fetchTexts } from "@/lib/sefaria";
-import type { StormTweet, SourceType } from "@/lib/types";
+import type { StormTweet, CarouselImage, SourceType } from "@/lib/types";
 
 export const runtime = "edge";
 
@@ -79,6 +79,7 @@ Your job: Make the actual content of this text feel alive, surprising, and worth
 CRITICAL OUTPUT FORMAT: One JSON object per line. No other text. No markdown:
 {"n":1,"text":"1/ tweet text"}
 {"n":2,"text":"2/ tweet text","img":"image prompt"}
+{"n":4,"text":"4/ tweet text","carousel":["prompt for image 1","prompt for image 2","prompt for image 3"]}
 
 LENGTH VARIATION — NON-NEGOTIABLE:
 - At least 2 tweets MUST be one short sentence, under 60 chars. Examples:
@@ -97,8 +98,9 @@ PACING:
 
 Rules:
 - 6-10 tweets total
-- EXACTLY 2 tweets with "img" field — detailed prompts for clean diagrams/illustrations on white background with labels
-- Omit "img" for all other tweets
+- EXACTLY 1 tweet with a single "img" field — a detailed prompt for a clean diagram/illustration on white background with labels
+- EXACTLY 1 tweet with a "carousel" field — an array of 2-4 image prompts that show a sequence, comparison, or step-by-step visual. Use carousels when the concept benefits from multiple related images (e.g., steps in a process, comparing different opinions, before/after, parts of a diagram). Each prompt should be a detailed description for a clean illustration on white background with labels.
+- Omit both "img" and "carousel" for all other tweets
 - No hashtags. No emojis.
 - Thread numbering: 1/, 2/, etc.
 
@@ -151,6 +153,11 @@ ${textList}`;
                 const parsed = JSON.parse(trimmed);
                 if (!parsed.text) continue;
 
+                const hasCarousel = Array.isArray(parsed.carousel) && parsed.carousel.length > 0;
+                const carousel: CarouselImage[] | undefined = hasCarousel
+                  ? parsed.carousel.map((p: string) => ({ prompt: p }))
+                  : undefined;
+
                 const tweet: StormTweet = {
                   id: `storm-${slug}-${tweetIndex}`,
                   ref: displayRef,
@@ -159,8 +166,9 @@ ${textList}`;
                   tweetNumber: parsed.n || tweetIndex + 1,
                   totalTweets: 0,
                   text: parsed.text,
-                  needsImage: !!parsed.img,
-                  imagePrompt: parsed.img || undefined,
+                  needsImage: !hasCarousel && !!parsed.img,
+                  imagePrompt: !hasCarousel ? (parsed.img || undefined) : undefined,
+                  carousel,
                 };
 
                 controller.enqueue(
@@ -181,6 +189,11 @@ ${textList}`;
             try {
               const parsed = JSON.parse(remaining);
               if (parsed.text) {
+                const hasCarousel = Array.isArray(parsed.carousel) && parsed.carousel.length > 0;
+                const carousel: CarouselImage[] | undefined = hasCarousel
+                  ? parsed.carousel.map((p: string) => ({ prompt: p }))
+                  : undefined;
+
                 const tweet: StormTweet = {
                   id: `storm-${slug}-${tweetIndex}`,
                   ref: displayRef,
@@ -189,8 +202,9 @@ ${textList}`;
                   tweetNumber: parsed.n || tweetIndex + 1,
                   totalTweets: 0,
                   text: parsed.text,
-                  needsImage: !!parsed.img,
-                  imagePrompt: parsed.img || undefined,
+                  needsImage: !hasCarousel && !!parsed.img,
+                  imagePrompt: !hasCarousel ? (parsed.img || undefined) : undefined,
+                  carousel,
                 };
                 controller.enqueue(
                   encoder.encode(

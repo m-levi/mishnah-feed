@@ -359,6 +359,7 @@ export default function HomePage() {
   const [reachedEnd, setReachedEnd] = useState(false);
 
   const imageQueueRef = useRef<Set<number>>(new Set());
+  const carouselQueueRef = useRef<Set<string>>(new Set());
   const hasAutoLoaded = useRef(false);
   const feedCacheRef = useRef<Record<string, FeedCache>>({});
   const currentFeedCtx = useRef<{
@@ -464,6 +465,7 @@ export default function HomePage() {
     setReachedEnd(false);
     currentFeedCtx.current = null;
     imageQueueRef.current = new Set();
+    carouselQueueRef.current = new Set();
 
     incrementUsage();
 
@@ -592,6 +594,7 @@ export default function HomePage() {
       setCopied(false);
       setReachedEnd(false);
       imageQueueRef.current = new Set();
+    carouselQueueRef.current = new Set();
 
       currentFeedCtx.current = { slug, ref, sourceType };
 
@@ -867,6 +870,106 @@ export default function HomePage() {
     processNext();
   }, [tweets, handleUpdateTweet]);
 
+  // Async carousel image loading
+  useEffect(() => {
+    if (tweets.length === 0) return;
+
+    const carouselTweets = tweets
+      .map((t, i) => ({ tweet: t, index: i }))
+      .filter(({ tweet }) => tweet.carousel && tweet.carousel.length > 0);
+
+    if (carouselTweets.length === 0) return;
+
+    const MAX_CONCURRENT = 2;
+    let active = 0;
+
+    interface CarouselJob {
+      tweetIndex: number;
+      imageIndex: number;
+      prompt: string;
+    }
+
+    const queue: CarouselJob[] = [];
+    for (const { tweet, index: tweetIndex } of carouselTweets) {
+      for (let imgIdx = 0; imgIdx < tweet.carousel!.length; imgIdx++) {
+        const img = tweet.carousel![imgIdx];
+        const key = `${tweetIndex}-${imgIdx}`;
+        if (!img.data && !img.loading && !carouselQueueRef.current.has(key)) {
+          queue.push({ tweetIndex, imageIndex: imgIdx, prompt: img.prompt });
+        }
+      }
+    }
+
+    if (queue.length === 0) return;
+
+    const processNext = () => {
+      while (active < MAX_CONCURRENT && queue.length > 0) {
+        const job = queue.shift()!;
+        active++;
+        const key = `${job.tweetIndex}-${job.imageIndex}`;
+        carouselQueueRef.current.add(key);
+
+        // Mark this carousel image as loading
+        setTweets((prev) =>
+          prev.map((t, i) => {
+            if (i !== job.tweetIndex || !t.carousel) return t;
+            const newCarousel = [...t.carousel];
+            newCarousel[job.imageIndex] = { ...newCarousel[job.imageIndex], loading: true };
+            return { ...t, carousel: newCarousel };
+          })
+        );
+
+        fetch("/api/generate-image", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ prompt: job.prompt }),
+        })
+          .then((res) => res.json())
+          .then((data) => {
+            setTweets((prev) =>
+              prev.map((t, i) => {
+                if (i !== job.tweetIndex || !t.carousel) return t;
+                const newCarousel = [...t.carousel];
+                if (data.imageData) {
+                  newCarousel[job.imageIndex] = {
+                    ...newCarousel[job.imageIndex],
+                    data: data.imageData,
+                    mimeType: data.mimeType,
+                    loading: false,
+                  };
+                } else {
+                  newCarousel[job.imageIndex] = {
+                    ...newCarousel[job.imageIndex],
+                    loading: false,
+                  };
+                }
+                return { ...t, carousel: newCarousel };
+              })
+            );
+          })
+          .catch(() => {
+            setTweets((prev) =>
+              prev.map((t, i) => {
+                if (i !== job.tweetIndex || !t.carousel) return t;
+                const newCarousel = [...t.carousel];
+                newCarousel[job.imageIndex] = {
+                  ...newCarousel[job.imageIndex],
+                  loading: false,
+                };
+                return { ...t, carousel: newCarousel };
+              })
+            );
+          })
+          .finally(() => {
+            active--;
+            processNext();
+          });
+      }
+    };
+
+    processNext();
+  }, [tweets]);
+
   // IntersectionObserver for infinite scroll
   useEffect(() => {
     const sentinel = sentinelRef.current;
@@ -976,11 +1079,23 @@ export default function HomePage() {
   const showFeed = hasTweets;
   const showEmpty = false; // Source pickers removed; feed always loads via For You
   const showSkeletons = isLoading && !hasTweets;
-  const imagesLoading = tweets.some((t) => t.imageLoading);
-  const imagesTotal = tweets.filter((t) => t.needsImage).length;
-  const imagesDone = tweets.filter(
-    (t) => t.needsImage && t.imageData
-  ).length;
+  const carouselImageCount = tweets.reduce(
+    (acc, t) => acc + (t.carousel ? t.carousel.length : 0),
+    0
+  );
+  const carouselImagesDone = tweets.reduce(
+    (acc, t) =>
+      acc + (t.carousel ? t.carousel.filter((img) => img.data).length : 0),
+    0
+  );
+  const imagesLoading =
+    tweets.some((t) => t.imageLoading) ||
+    tweets.some((t) => t.carousel?.some((img) => img.loading));
+  const imagesTotal =
+    tweets.filter((t) => t.needsImage).length + carouselImageCount;
+  const imagesDone =
+    tweets.filter((t) => t.needsImage && t.imageData).length +
+    carouselImagesDone;
   const activeTabIndex = tabs.findIndex((t) => t.key === activeTab);
 
   const sidebarNavItems: { key: string; label: string; icon: typeof Home }[] = [

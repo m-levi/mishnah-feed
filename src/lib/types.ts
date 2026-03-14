@@ -18,6 +18,13 @@ export interface SourceText {
   segmentNumber: number;
 }
 
+export interface CarouselImage {
+  prompt: string;
+  data?: string;
+  mimeType?: string;
+  loading?: boolean;
+}
+
 export interface StormTweet {
   id: string;
   ref: string;
@@ -31,6 +38,7 @@ export interface StormTweet {
   imageData?: string;
   imageMimeType?: string;
   imageLoading?: boolean;
+  carousel?: CarouselImage[];
   label?: string; // contextual label like "This Week's Parsha", "Daf Yomi"
 }
 
