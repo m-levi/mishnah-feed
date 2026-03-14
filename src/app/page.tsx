@@ -19,6 +19,8 @@ import { TweetSkeleton } from "@/components/tweet-skeleton";
 import { CommentaryView } from "@/components/commentary-view";
 import { BookmarksSheet } from "@/components/bookmarks-sheet";
 import { AuthModal } from "@/components/auth-modal";
+import { BottomNav } from "@/components/bottom-nav";
+import type { BottomNavKey } from "@/components/bottom-nav";
 import { useAuth } from "@/lib/auth-context";
 import { supabase } from "@/lib/supabase";
 import { getItemFromState, getNextRef } from "@/lib/source-data";
@@ -998,6 +1000,14 @@ export default function HomePage() {
 
   const activeSidebarKey = activeTab;
 
+  const handleBottomNav = useCallback((key: BottomNavKey) => {
+    if (key === "bookmarks") {
+      setShowBookmarks(true);
+    } else {
+      handleTabChange(key as TabKey);
+    }
+  }, [handleTabChange]);
+
   return (
     <div className="min-h-screen bg-[var(--bg)] pb-16 sm:pb-0 sm:flex sm:justify-center">
       {/* ─── DESKTOP SIDEBAR ─── */}
@@ -1104,13 +1114,6 @@ export default function HomePage() {
                   <Share2 className="w-[18px] h-[18px] text-[var(--muted)]" />
                 </button>
               )}
-              <button
-                onClick={() => setShowBookmarks(true)}
-                className="w-9 h-9 rounded-full hover:bg-[var(--bg)] active:bg-[var(--border)] flex items-center justify-center transition-colors cursor-pointer"
-                title="Bookmarks"
-              >
-                <Bookmark className="w-[18px] h-[18px] text-[var(--muted)]" />
-              </button>
               {!user ? (
                 <button
                   onClick={() => setShowAuth(true)}
@@ -1165,30 +1168,11 @@ export default function HomePage() {
             </div>
           </div>
 
-          {/* Tab row - mobile only */}
-          <div className="sm:hidden relative">
-            <div className="flex">
-              {tabs.map((tab) => (
-                <button
-                  key={tab.key}
-                  onClick={() => handleTabChange(tab.key)}
-                  className={`flex-1 py-3 text-sm font-semibold transition-colors cursor-pointer relative ${
-                    activeTab === tab.key
-                      ? "text-[var(--text)]"
-                      : "text-[var(--muted)] hover:text-[var(--text)]"
-                  }`}
-                >
-                  {tab.label}
-                </button>
-              ))}
-            </div>
-            <div
-              className="absolute bottom-0 h-[3px] rounded-full bg-[var(--accent)] transition-all duration-300 ease-out"
-              style={{
-                width: `${100 / tabs.length}%`,
-                left: `${(activeTabIndex * 100) / tabs.length}%`,
-              }}
-            />
+          {/* Mobile: show current tab name */}
+          <div className="sm:hidden px-4 pb-2">
+            <span className="text-xs font-semibold text-[var(--muted)] uppercase tracking-wider">
+              {tabs.find(t => t.key === activeTab)?.label || "Feed"}
+            </span>
           </div>
         </div>
 
@@ -1394,6 +1378,9 @@ export default function HomePage() {
           message={authMessage}
         />
       )}
+
+      {/* Mobile bottom nav */}
+      <BottomNav activeTab={activeTab} onNavigate={handleBottomNav} />
     </div>
   );
 }
