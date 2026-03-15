@@ -23,6 +23,11 @@ import { BottomNav } from "@/components/bottom-nav";
 import type { BottomNavKey } from "@/components/bottom-nav";
 import { useAuth } from "@/lib/auth-context";
 import { supabase } from "@/lib/supabase";
+import {
+  setTrackingUser,
+  trackFeedLoad,
+  trackTabSwitch,
+} from "@/lib/tracking";
 import { getItemFromState, getNextRef } from "@/lib/source-data";
 import type { StormTweet, SourceType, PickerState } from "@/lib/types";
 
@@ -99,7 +104,7 @@ async function readStream(
   response: Response,
   signal: AbortSignal,
   onTweet: (tweet: StormTweet) => void,
-  onDone: (total: number) => void,
+  onDone: (total: number, cached?: boolean) => void,
   onError: (msg: string) => void
 ) {
   const reader = response.body!.getReader();
@@ -128,7 +133,7 @@ async function readStream(
             return;
           }
           if (parsed.done) {
-            onDone(parsed.total);
+            onDone(parsed.total, parsed.cached);
             return;
           }
           onTweet(parsed as StormTweet);
@@ -357,6 +362,7 @@ export default function HomePage() {
   const [authMessage, setAuthMessage] = useState<string | undefined>();
   const [lastStudied, setLastStudied] = useState<LastStudied | null>(null);
   const [reachedEnd, setReachedEnd] = useState(false);
+  const [wasCached, setWasCached] = useState(false);
 
   const imageQueueRef = useRef<Set<number>>(new Set());
   const carouselQueueRef = useRef<Set<string>>(new Set());
@@ -389,6 +395,11 @@ export default function HomePage() {
       activeStreamRef.current = null;
     }
   }, []);
+
+  // Sync tracking user with auth state
+  useEffect(() => {
+    setTrackingUser(user?.id || null);
+  }, [user]);
 
   // Load persisted state on mount
   useEffect(() => {
@@ -463,16 +474,19 @@ export default function HomePage() {
     setShareUrl(null);
     setCopied(false);
     setReachedEnd(false);
+    setWasCached(false);
     currentFeedCtx.current = null;
     imageQueueRef.current = new Set();
     carouselQueueRef.current = new Set();
 
     incrementUsage();
+    trackFeedLoad("foryou", { userId: user?.id });
 
     try {
       const res = await fetch("/api/discover", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: user?.id || null }),
         signal: controller.signal,
       });
 
@@ -486,8 +500,9 @@ export default function HomePage() {
             setTweets((prev) => [...prev, tweet]);
           }
         },
-        () => {
+        (total, cached) => {
           if (!controller.signal.aborted) {
+            if (cached) setWasCached(true);
             setTweets((prev) => {
               const refCounts = new Map<string, number>();
               prev.forEach((t) =>
@@ -520,13 +535,14 @@ export default function HomePage() {
         activeStreamRef.current = null;
       }
     }
-  }, [abortActiveStream, checkUsageLimit, incrementUsage, promptAuth]);
+  }, [abortActiveStream, checkUsageLimit, incrementUsage, promptAuth, user]);
 
   const handleTabChange = useCallback(
     (tab: TabKey) => {
       if (tab === activeTab) return;
 
       abortActiveStream();
+      trackTabSwitch(activeTab, tab);
 
       // Cache current feed state if leaving the feed tab
       if (activeTab === "foryou" && tweets.length > 0) {
@@ -544,6 +560,7 @@ export default function HomePage() {
       setIsLoading(false);
       setLoadingMore(false);
       setReachedEnd(false);
+      setWasCached(false);
 
       // Restore feed cache when switching back to For You
       if (tab === "foryou") {
@@ -593,12 +610,14 @@ export default function HomePage() {
       setShareUrl(null);
       setCopied(false);
       setReachedEnd(false);
+      setWasCached(false);
       imageQueueRef.current = new Set();
     carouselQueueRef.current = new Set();
 
       currentFeedCtx.current = { slug, ref, sourceType };
 
       incrementUsage();
+      trackFeedLoad("study", { slug, ref, sourceType });
 
       const studyData: LastStudied = {
         tab: activeTab as TabKey,
@@ -630,8 +649,9 @@ export default function HomePage() {
               setTweets((prev) => [...prev, tweet]);
             }
           },
-          (total) => {
+          (total, cached) => {
             if (!controller.signal.aborted) {
+              if (cached) setWasCached(true);
               setTweets((prev) => {
                 const count = total || prev.length;
                 const updated = prev.map((t) => ({
@@ -1295,8 +1315,6 @@ export default function HomePage() {
       {activeTab === "foryou" && (
         <>
 
-          {/* Usage bar removed — no rate limiting */}
-
           {/* Feed info bar */}
           {showFeed && currentSelection && (
             <div className="bg-[var(--card-bg)] border-b border-[var(--border)] px-4 py-2">
@@ -1306,6 +1324,9 @@ export default function HomePage() {
                     {currentSelection}
                   </span>{" "}
                   &middot; {tweets.length} tweets
+                  {wasCached && !isLoading && (
+                    <span className="text-[var(--accent)]"> &middot; instant</span>
+                  )}
                   {isLoading && (
                     <span className="text-[var(--accent)]">
                       {" "}

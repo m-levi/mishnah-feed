@@ -1,33 +1,22 @@
 import { ai, GEMINI_TEXT_MODEL } from "@/lib/gemini";
 import { fetchTexts } from "@/lib/sefaria";
+import { supabase } from "@/lib/supabase";
 import type { StormTweet, CarouselImage, SourceType } from "@/lib/types";
 
 export const runtime = "edge";
 
 const sourceTypeContext: Record<SourceType, string> = {
-  mishnayos: `You are an engaging Torah educator explaining a Mishnah to a frum audience. Use standard Orthodox terminology:
-- Say "Hashem" not "God", "tefillah" not "prayer", "brachos" not "blessings"
-- Use "Chazal", "halacha", "mitzva/mitzvos", "aveirah", "Beis HaMikdash", "Kohen Gadol"
-- Reference Tanna'im by their proper titles (Rabbi, Rabban, etc.)
-- Say "Klal Yisroel", "Am Yisroel" where appropriate
-- Use "davening", "bentching", "leining" etc. for common practices
-- Keep the Torah hashkafa authentic — this is Torah learning, not academic study`,
+  mishnayos: `You are @TorahTakes, the anonymous frum Torah account that went viral. Your followers are frum Jews, 18-35, who scroll TikTok and Twitter daily. They've seen a thousand "Torah thought" posts. They scroll past the boring ones. They stop for yours.
 
-  gemara: `You are an engaging Torah educator explaining a Gemara sugya to a frum audience. Use standard Orthodox terminology:
-- Say "Hashem" not "God", reference the Gemara properly
-- Use "Chazal", "shakla v'tarya", "machlokes", "svara", "kashya", "teirutz"
-- Reference Amora'im and Tanna'im by proper titles
-- Explain the back-and-forth of the sugya clearly
-- Use "halacha l'maaseh", "maskana", "kal v'chomer", "gezeirah shavah" etc.
-- Keep the Torah hashkafa authentic`,
+Use standard Orthodox terminology: "Hashem" not "God", "tefillah" not "prayer", "brachos" not "blessings". Use "Chazal", "halacha", "mitzva/mitzvos", "aveirah", "Beis HaMikdash", "Kohen Gadol". Reference Tanna'im by their proper titles. Say "Klal Yisroel", "davening", "bentching", "leining". Keep hashkafa authentic. This is a Mishnah.`,
 
-  chumash: `You are an engaging Torah educator explaining pesukim from Tanakh to a frum audience. Use standard Orthodox terminology:
-- Say "Hashem" not "God", "Hakadosh Baruch Hu", "Ribbono Shel Olam"
-- Reference Rashi, Ramban, Ibn Ezra, Sforno and other meforshim where relevant
-- Use "parshas", "sedra", "parashah" for Torah portions
-- Reference "Klal Yisroel", "Eretz Yisroel", "Beis HaMikdash"
-- Include relevant midrashim or meforshim insights
-- Keep the Torah hashkafa authentic`,
+  gemara: `You are @TorahTakes, the anonymous frum Torah account that went viral. Your followers are frum Jews, 18-35, who scroll TikTok and Twitter daily. They've seen a thousand shiur summaries. They stop for your threads because you make the sugya come alive.
+
+Use yeshivish Gemara terminology: "shakla v'tarya", "machlokes", "svara", "kashya", "teirutz", "maskana", "kal v'chomer", "gezeirah shavah", "halacha l'maaseh". Reference Amora'im and Tanna'im properly. This is a Gemara sugya.`,
+
+  chumash: `You are @TorahTakes, the anonymous frum Torah account that went viral. Your followers are frum Jews, 18-35, who scroll TikTok and Twitter daily. They stop for your threads because you find the angles nobody else sees.
+
+Use standard Orthodox terminology: "Hashem", "Hakadosh Baruch Hu", "Ribbono Shel Olam". Reference Rashi, Ramban, Ibn Ezra, Sforno and other meforshim. Use "parshas", "sedra", "Klal Yisroel", "Eretz Yisroel", "Beis HaMikdash". Include relevant midrashim. This is from Tanakh.`,
 };
 
 export async function POST(req: Request) {
@@ -45,6 +34,46 @@ export async function POST(req: Request) {
       );
     }
 
+    // Check cache first
+    const { data: cached } = await supabase
+      .from("cached_feeds")
+      .select("*")
+      .eq("slug", slug)
+      .eq("ref", ref)
+      .gt("expires_at", new Date().toISOString())
+      .limit(1)
+      .single();
+
+    if (cached && cached.tweets && Array.isArray(cached.tweets) && cached.tweets.length > 0) {
+      // Serve from cache instantly via SSE
+      const encoder = new TextEncoder();
+      const tweets = cached.tweets as StormTweet[];
+      const readable = new ReadableStream({
+        start(controller) {
+          for (const tweet of tweets) {
+            controller.enqueue(
+              encoder.encode(`data: ${JSON.stringify({ ...tweet, cachedFeedId: cached.id })}\n\n`)
+            );
+          }
+          controller.enqueue(
+            encoder.encode(
+              `data: ${JSON.stringify({ done: true, total: tweets.length, cached: true })}\n\n`
+            )
+          );
+          controller.close();
+        },
+      });
+
+      return new Response(readable, {
+        headers: {
+          "Content-Type": "text/event-stream",
+          "Cache-Control": "no-cache",
+          Connection: "keep-alive",
+        },
+      });
+    }
+
+    // Not cached - generate fresh
     const texts = await fetchTexts(slug, ref);
 
     if (texts.length === 0) {
@@ -59,13 +88,14 @@ export async function POST(req: Request) {
           `--- ${t.ref} ---\nHebrew: ${t.hebrew}\nEnglish: ${t.english}`
       )
       .join("\n\n");
-    const segmentCount = texts.length;
 
     const context = sourceTypeContext[sourceType];
 
     const prompt = `${context}
 
-Break down this Torah text as a tweet storm. You're a brilliant Torah educator on Twitter — your threads go viral because you make ancient wisdom feel alive and urgent.
+Your secret weapon: You don't just explain Torah. You find the thing that makes someone's jaw drop, text their chavrusa at 11pm, or screenshot and share on their story.
+
+The Rashi that contradicts what everyone learned in school. The Tosafos that asks exactly what you always wondered. The Midrash that sounds like it was written yesterday.
 
 ACCURACY IS PARAMOUNT — NON-NEGOTIABLE:
 - ONLY explain and teach what is ACTUALLY in the source text provided below. Do NOT fabricate or invent teachings.
@@ -74,7 +104,20 @@ ACCURACY IS PARAMOUNT — NON-NEGOTIABLE:
 - It's better to deeply explain what the text DOES say than to fabricate what it doesn't.
 - When the source text includes both Hebrew and English, use both to ensure accuracy.
 
-Your job: Make the actual content of this text feel alive, surprising, and worth reading. Find the "wait, THAT'S what it means?" moments that are genuinely there.
+VIRAL MECHANICS:
+- Hook in 8 words or fewer. If tweet 1/ doesn't stop the thumb, nothing else matters.
+- "Most people read this passuk wrong." "Your rebbe probably skipped this Rashi." "The Gemara's answer here is wild."
+- SPECIFICITY is magnetic. Not "Rashi has an interesting pshat" but "Rashi says Moshe literally argued with Hashem for six straight days."
+- TENSION creates engagement. Set up a kashya, delay the teirutz.
+- End with a REFRAME. Last tweet should make them see the text completely differently.
+
+PACING (this separates viral from forgettable):
+1/ THE STOP — 3-8 words. Question mark in the reader's mind.
+2/ THE SETUP — Context, just enough to understand the stakes. 1-2 sentences.
+3/ THE TWIST — Short. Cognitive dissonance. "But here's the problem."
+4/ THE DEPTH — Longest tweet. The Rashi, the Ramban, the Midrash. Actual substance.
+5/ THE LAND — Short. Let the insight land. "Read that again." or a one-sentence reframe.
+6-10/ Continue: short-long-short-long rhythm.
 
 CRITICAL OUTPUT FORMAT: One JSON object per line. No other text. No markdown:
 {"n":1,"text":"1/ tweet text"}
@@ -88,20 +131,12 @@ LENGTH VARIATION — NON-NEGOTIABLE:
 - Some tweets: up to 280 chars with line breaks. The deep dives.
 - If all your tweets are the same length, START OVER.
 
-PACING:
-1/ Hook — short, provocative, makes you want to keep reading
-2/ Setup — a bit longer, gives context
-3/ Tension — short again. "But wait."
-4/ Payoff — the longest tweet. The real insight from the text.
-5/ Reaction — short. Let it land.
-...continue this rhythm.
-
 Rules:
 - 6-10 tweets total
 - EXACTLY 1 tweet with a single "img" field — a detailed prompt for a clean diagram/illustration on white background with labels
 - EXACTLY 1 tweet with a "carousel" field — an array of 2-4 image prompts that show a sequence, comparison, or step-by-step visual. Use carousels when the concept benefits from multiple related images (e.g., steps in a process, comparing different opinions, before/after, parts of a diagram). Each prompt should be a detailed description for a clean illustration on white background with labels.
 - Omit both "img" and "carousel" for all other tweets
-- No hashtags. No emojis.
+- No hashtags. No emojis. No cringe.
 - Thread numbering: 1/, 2/, etc.
 
 Source text (base ALL your content on this):
@@ -109,6 +144,7 @@ Source text (base ALL your content on this):
 ${textList}`;
 
     const encoder = new TextEncoder();
+    const allTweets: StormTweet[] = [];
 
     const readable = new ReadableStream({
       async start(controller) {
@@ -135,7 +171,6 @@ ${textList}`;
               buffer += part.text;
             }
 
-            // Extract complete lines
             const lines = buffer.split("\n");
             buffer = lines.pop()!;
 
@@ -171,10 +206,9 @@ ${textList}`;
                   carousel,
                 };
 
+                allTweets.push(tweet);
                 controller.enqueue(
-                  encoder.encode(
-                    `data: ${JSON.stringify(tweet)}\n\n`
-                  )
+                  encoder.encode(`data: ${JSON.stringify(tweet)}\n\n`)
                 );
                 tweetIndex++;
               } catch {
@@ -206,10 +240,9 @@ ${textList}`;
                   imagePrompt: !hasCarousel ? (parsed.img || undefined) : undefined,
                   carousel,
                 };
+                allTweets.push(tweet);
                 controller.enqueue(
-                  encoder.encode(
-                    `data: ${JSON.stringify(tweet)}\n\n`
-                  )
+                  encoder.encode(`data: ${JSON.stringify(tweet)}\n\n`)
                 );
                 tweetIndex++;
               }
@@ -223,6 +256,34 @@ ${textList}`;
               `data: ${JSON.stringify({ done: true, total: tweetIndex })}\n\n`
             )
           );
+
+          // Cache the generated content in background
+          if (allTweets.length > 0) {
+            const finalTweets = allTweets.map((t) => ({
+              ...t,
+              totalTweets: allTweets.length,
+            }));
+            supabase
+              .from("cached_feeds")
+              .upsert(
+                {
+                  slug,
+                  ref,
+                  source_type: sourceType,
+                  display_name: displayRef,
+                  tweets: finalTweets,
+                  tweet_count: finalTweets.length,
+                  quality_score: finalTweets.length >= 6 ? 1.0 : 0.5,
+                  expires_at: new Date(
+                    Date.now() + 7 * 24 * 60 * 60 * 1000
+                  ).toISOString(),
+                },
+                { onConflict: "slug,ref" }
+              )
+              .then(({ error }) => {
+                if (error) console.error("Cache store error:", error);
+              });
+          }
         } catch (error) {
           console.error("Tweet storm streaming error:", error);
           controller.enqueue(

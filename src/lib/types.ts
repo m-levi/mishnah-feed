@@ -40,6 +40,7 @@ export interface StormTweet {
   imageLoading?: boolean;
   carousel?: CarouselImage[];
   label?: string; // contextual label like "This Week's Parsha", "Daf Yomi"
+  cachedFeedId?: string; // ID from cached_feeds table
 }
 
 export interface CommentaryTweet {
@@ -137,4 +138,22 @@ export interface ScrollItemRead {
   user_id: string;
   scroll_item_id: string;
   read_at: string;
+}
+
+export interface CachedFeed {
+  id: string;
+  slug: string;
+  ref: string;
+  source_type: SourceType;
+  display_name: string;
+  label?: string;
+  tweets: StormTweet[];
+  tweet_count: number;
+  quality_score: number;
+  view_count: number;
+  like_count: number;
+  bookmark_count: number;
+  created_at: string;
+  score?: number;
+  reason?: string;
 }

@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { ImageIcon, MessageCircle, Copy, Check, Heart, Bookmark } from "lucide-react";
 import { ImageCarousel } from "@/components/image-carousel";
+import { trackView, trackDwell, trackAction } from "@/lib/tracking";
 import type { StormTweet } from "@/lib/types";
 
 interface StormCardProps {
@@ -36,6 +37,12 @@ export function StormCard({ tweet, onTap }: StormCardProps) {
   const [copied, setCopied] = useState(false);
   const [likeAnim, setLikeAnim] = useState(false);
 
+  const cardRef = useRef<HTMLElement>(null);
+  const viewTracked = useRef(false);
+  const dwellStart = useRef<number | null>(null);
+  const totalDwell = useRef(0);
+
+  // Load persisted state
   useEffect(() => {
     setLiked(getFavorites().includes(tweet.id));
     try {
@@ -47,57 +54,129 @@ export function StormCard({ tweet, onTap }: StormCardProps) {
     } catch {}
   }, [tweet.id]);
 
-  const handleLearnMore = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    onTap?.(tweet);
-  };
+  // Viewport tracking: view + dwell time
+  useEffect(() => {
+    const el = cardRef.current;
+    if (!el) return;
 
-  const handleCopy = async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    try {
-      await navigator.clipboard.writeText(tweet.text);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {}
-  };
+    let viewTimer: ReturnType<typeof setTimeout> | null = null;
 
-  const handleLike = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    const newLiked = !liked;
-    setLiked(newLiked);
-    if (newLiked) {
-      setLikeAnim(true);
-      setTimeout(() => setLikeAnim(false), 400);
-    }
-    const ids = getFavorites();
-    if (newLiked) {
-      if (!ids.includes(tweet.id)) ids.push(tweet.id);
-    } else {
-      const idx = ids.indexOf(tweet.id);
-      if (idx >= 0) ids.splice(idx, 1);
-    }
-    setFavorites(ids);
-  };
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting && entry.intersectionRatio >= 0.5) {
+            // Start dwell timer
+            dwellStart.current = Date.now();
 
-  const handleSave = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    const newBookmarked = !bookmarked;
-    setBookmarked(newBookmarked);
-    try {
-      const saved = localStorage.getItem("scroll-saved");
-      const list: StormTweet[] = saved ? JSON.parse(saved) : [];
-      if (newBookmarked) {
-        if (!list.some((t) => t.id === tweet.id)) list.push(tweet);
-      } else {
-        const idx = list.findIndex((t) => t.id === tweet.id);
-        if (idx >= 0) list.splice(idx, 1);
+            // Track view after 1 second of visibility
+            if (!viewTracked.current) {
+              viewTimer = setTimeout(() => {
+                viewTracked.current = true;
+                trackView(tweet);
+              }, 1000);
+            }
+          } else {
+            // Left viewport - track dwell
+            if (dwellStart.current) {
+              const elapsed = Date.now() - dwellStart.current;
+              totalDwell.current += elapsed;
+              dwellStart.current = null;
+            }
+
+            if (viewTimer) {
+              clearTimeout(viewTimer);
+              viewTimer = null;
+            }
+          }
+        }
+      },
+      { threshold: 0.5 }
+    );
+
+    observer.observe(el);
+
+    return () => {
+      observer.disconnect();
+      if (viewTimer) clearTimeout(viewTimer);
+
+      // Track accumulated dwell on unmount
+      if (dwellStart.current) {
+        totalDwell.current += Date.now() - dwellStart.current;
       }
-      localStorage.setItem("scroll-saved", JSON.stringify(list));
-    } catch {}
-  };
+      if (totalDwell.current > 0) {
+        trackDwell(tweet, totalDwell.current);
+      }
+    };
+  }, [tweet]);
+
+  const handleLearnMore = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation();
+      trackAction("learn_more", tweet);
+      onTap?.(tweet);
+    },
+    [tweet, onTap]
+  );
+
+  const handleCopy = useCallback(
+    async (e: React.MouseEvent) => {
+      e.stopPropagation();
+      try {
+        await navigator.clipboard.writeText(tweet.text);
+        setCopied(true);
+        trackAction("copy", tweet);
+        setTimeout(() => setCopied(false), 2000);
+      } catch {}
+    },
+    [tweet]
+  );
+
+  const handleLike = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation();
+      const newLiked = !liked;
+      setLiked(newLiked);
+      if (newLiked) {
+        setLikeAnim(true);
+        setTimeout(() => setLikeAnim(false), 400);
+      }
+      trackAction(newLiked ? "like" : "unlike", tweet);
+      const ids = getFavorites();
+      if (newLiked) {
+        if (!ids.includes(tweet.id)) ids.push(tweet.id);
+      } else {
+        const idx = ids.indexOf(tweet.id);
+        if (idx >= 0) ids.splice(idx, 1);
+      }
+      setFavorites(ids);
+    },
+    [liked, tweet]
+  );
+
+  const handleSave = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation();
+      const newBookmarked = !bookmarked;
+      setBookmarked(newBookmarked);
+      trackAction(newBookmarked ? "bookmark" : "unbookmark", tweet);
+      try {
+        const saved = localStorage.getItem("scroll-saved");
+        const list: StormTweet[] = saved ? JSON.parse(saved) : [];
+        if (newBookmarked) {
+          if (!list.some((t) => t.id === tweet.id)) list.push(tweet);
+        } else {
+          const idx = list.findIndex((t) => t.id === tweet.id);
+          if (idx >= 0) list.splice(idx, 1);
+        }
+        localStorage.setItem("scroll-saved", JSON.stringify(list));
+      } catch {}
+    },
+    [bookmarked, tweet]
+  );
 
   return (
     <article
+      ref={cardRef}
       className={`bg-[var(--card-bg)] px-4 transition-colors duration-150 hover:bg-[var(--bg)]/60 active:bg-[var(--bg)]/80 cursor-pointer press-card ${
         isFirst && !isSingle ? "border-b-0" : "border-b border-[var(--border)]"
       } ${isMid ? "border-b-0" : ""}`}
@@ -171,7 +250,10 @@ export function StormCard({ tweet, onTap }: StormCardProps) {
                 />
               ) : (
                 <div className="relative">
-                  <div className="shimmer w-full" style={{ height: 200 }} />
+                  <div
+                    className="shimmer w-full"
+                    style={{ height: 200 }}
+                  />
                   <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
                     <div className="w-10 h-10 rounded-full bg-white/80 backdrop-blur-sm flex items-center justify-center shadow-sm">
                       <ImageIcon className="w-5 h-5 text-[var(--muted)] animate-pulse" />
