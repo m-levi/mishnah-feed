@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { ImageIcon, MessageCircle, Copy, Check, Heart, Bookmark } from "lucide-react";
+import { ImageIcon, MessageCircle, Copy, Check, Heart, Bookmark, Play } from "lucide-react";
 import { ImageCarousel } from "@/components/image-carousel";
 import { trackView, trackDwell, trackAction } from "@/lib/tracking";
 import type { StormTweet } from "@/lib/types";
@@ -264,6 +264,38 @@ export function StormCard({ tweet, onTap }: StormCardProps) {
                   </div>
                 </div>
               )}
+            </div>
+          )}
+
+          {/* Video */}
+          {tweet.videoUrl && tweet.videoReady && (
+            <div className="mt-3 rounded-2xl overflow-hidden border border-[var(--border)]">
+              <video
+                src={tweet.videoUrl}
+                className="w-full"
+                controls
+                playsInline
+                muted
+                loop
+                preload="metadata"
+                poster=""
+              />
+            </div>
+          )}
+
+          {/* Video placeholder (generating) */}
+          {tweet.videoPrompt && !tweet.videoUrl && !tweet.videoReady && (
+            <div className="mt-3 rounded-2xl overflow-hidden border border-[var(--border)]">
+              <div className="relative bg-gradient-to-br from-[var(--accent-light)] to-[var(--bg)]" style={{ height: 200 }}>
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
+                  <div className="w-12 h-12 rounded-full bg-[var(--accent)]/10 flex items-center justify-center">
+                    <Play className="w-6 h-6 text-[var(--accent)] animate-pulse" />
+                  </div>
+                  <span className="text-xs font-medium text-[var(--muted)] px-3 py-1 rounded-full bg-white/70 backdrop-blur-sm">
+                    Video generating...
+                  </span>
+                </div>
+              </div>
             </div>
           )}
 

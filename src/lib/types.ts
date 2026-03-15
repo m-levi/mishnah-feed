@@ -39,6 +39,9 @@ export interface StormTweet {
   imageMimeType?: string;
   imageLoading?: boolean;
   carousel?: CarouselImage[];
+  videoPrompt?: string;
+  videoUrl?: string;
+  videoReady?: boolean;
   label?: string; // contextual label like "This Week's Parsha", "Daf Yomi"
   cachedFeedId?: string; // ID from cached_feeds table
 }
